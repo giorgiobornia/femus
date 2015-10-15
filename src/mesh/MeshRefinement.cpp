@@ -67,19 +67,19 @@ void MeshRefinement::FlagElementsToBeRefinedByUserDefinedFunction() {
   
     for (unsigned iel=0; iel<_mesh.GetNumberOfElements(); iel+=1) {
       unsigned nve=_mesh.el->GetElementDofNumber(iel,0);
-      double vtx=0.,vty=0.,vtz=0.;
+      std::vector < double > vtx(3,0.);
       for ( unsigned i=0; i<nve; i++) {
 	unsigned inode=_mesh.el->GetElementVertexIndex(iel,i)-1u;
 	unsigned inode_Metis=_mesh.GetMetisDof(inode,2);
-	vtx+=X_local[inode_Metis];  
-	vty+=Y_local[inode_Metis]; 
-	vtz+=Z_local[inode_Metis]; 
+	vtx[0]+= (*_mesh._coordinate->_Sol[0])(inode_Metis);
+	vtx[1]+= (*_mesh._coordinate->_Sol[1])(inode_Metis);
+	vtx[2]+= (*_mesh._coordinate->_Sol[2])(inode_Metis);
       }
-      vtx/=nve;
-      vty/=nve;
-      vtz/=nve;
+      vtx[0]/=nve;
+      vtx[1]/=nve;
+      vtx[2]/=nve;
       if(!_mesh.el->GetRefinedElementIndex(iel)){
-	if (_mesh._SetRefinementFlag(vtx,vty,vtz,_mesh.el->GetElementGroup(iel),_mesh.GetLevel())) {
+	if (_mesh._SetRefinementFlag(vtx,_mesh.el->GetElementGroup(iel),_mesh.GetLevel())) {
 	  _mesh.el->SetRefinedElementIndex(iel,1);
 	  _mesh.el->AddToRefinedElementNumber(1);
 	  short unsigned elt=_mesh.el->GetElementType(iel);
@@ -101,19 +101,19 @@ void MeshRefinement::FlagElementsToBeRefinedByAMR() {
 	unsigned kel = _mesh.IS_Mts2Gmt_elem[iel_metis];
 	short unsigned kelt=_mesh.el->GetElementType(kel);
         unsigned nve=_mesh.el->GetElementDofNumber(kel,0);
-	double vtx=0.,vty=0.,vtz=0.;
+	std::vector < double > vtx(3,0.);
 	for(unsigned i=0; i<nve; i++) {
 	  unsigned inode=_mesh.el->GetElementVertexIndex(kel,i)-1u;
 	  unsigned inode_metis=_mesh.GetMetisDof(inode,2);
-      	  vtx+= (*_mesh._coordinate->_Sol[0])(inode_metis);
-	  vty+= (*_mesh._coordinate->_Sol[1])(inode_metis);
-	  vtz+= (*_mesh._coordinate->_Sol[2])(inode_metis);
+	  vtx[0]+= (*_mesh._coordinate->_Sol[0])(inode_metis);
+	  vtx[1]+= (*_mesh._coordinate->_Sol[1])(inode_metis);
+	  vtx[2]+= (*_mesh._coordinate->_Sol[2])(inode_metis);
 	}
-	vtx/=nve;
-	vty/=nve;
-	vtz/=nve;
+	vtx[0]/=nve;
+	vtx[1]/=nve;
+	vtx[2]/=nve;
 	if( (*_mesh._coordinate->_Sol[3])(iel_metis) < 0.5 &&
-	    _mesh._SetRefinementFlag(vtx,vty,vtz,_mesh.el->GetElementGroup(kel),_mesh.GetLevel()) ) {
+	    _mesh._SetRefinementFlag(vtx,_mesh.el->GetElementGroup(kel),_mesh.GetLevel()) ) {
 	    _mesh._coordinate->_Sol[3]->set(iel_metis,1.);
 	}
       }
@@ -177,6 +177,7 @@ void MeshRefinement::RefineMesh(const unsigned & igrid, Mesh *mshc, const elem_t
   _mesh.el->SetElementGroupNumber(elc->GetElementGroupNumber());
   _mesh.el->SetNumberElementFather(elc->GetElementNumber());
 
+  bool AMR = false;
   for (unsigned iel=0; iel<elc->GetElementNumber(); iel++) {
     if ( elc->GetRefinedElementIndex(iel) ) {
       elc->SetRefinedElementIndex(iel,jel+1u);
@@ -215,6 +216,9 @@ void MeshRefinement::RefineMesh(const unsigned & igrid, Mesh *mshc, const elem_t
       jel+=_mesh.GetRefIndex();
 //       el->AddToElementNumber(REF_INDEX,elt);
       _mesh.el->AddToElementNumber(_mesh.GetRefIndex(),elt);
+    }
+    else {
+      AMR=true;
     }
   }
 
@@ -282,8 +286,12 @@ void MeshRefinement::RefineMesh(const unsigned & igrid, Mesh *mshc, const elem_t
   _mesh.Buildkel();
   
   MeshMetisPartitioning meshmetispartitioning(_mesh);
-  meshmetispartitioning.DoPartition();
-  //_mesh.GenerateMetisMeshPartition();
+  if( AMR == true ){
+    meshmetispartitioning.DoPartition();
+  }
+  else{
+    meshmetispartitioning.DoPartition(*mshc);
+  }
   
   _mesh.FillISvector();
     

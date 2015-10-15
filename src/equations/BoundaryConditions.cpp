@@ -18,12 +18,9 @@ namespace femus {
      BoundaryConditions::BoundaryConditions(const DofMap* dofmap_in) : _dofmap(dofmap_in)/*,_Dir_pen_fl(0)*/  {   }
 
          BoundaryConditions::~BoundaryConditions() {
-	   
+
  //=== node
     delete[] _bc;
- //=== element
-     for (uint l=0; l < _dofmap->_mesh._NoLevels; l++)   delete [] _bc_fe_kk[l];
-     delete [] _bc_fe_kk;
  //===penalty
 //     clearElBc();   /*if (_Dir_pen_fl==1)*/ //DO IT ALWAYS!
 
@@ -45,29 +42,29 @@ namespace femus {
  // and assign a FLAG to the VOLUME DOF ELEMENTS.
  // climbing back from Boundary to Volume (we know how to do that)
  // In order to pick the boundary element, we pick its MIDDLE POINT.
- 
+
  //=== why don't we better impose the boundary conditions
  // based on QUANTITIES and then SCALAR COMPONENTS of QUANTITIES?
- // Then depending on the type of dof you would have to 
+ // Then depending on the type of dof you would have to
  // loop over the DOF OBJECTS generating those dofs!
  // So you would loop either over NODES or over ELEMENTS and so on.
- 
+
  //Wait, we did two functions for QQ-LL and KK, but actually one function seems to be enough!!!
  //The only thing is that you need to distinguish between passing the NODE COORDINATE or the MIDDLE POINT of an ELEMENT,
  //but we can MODIFY the bc_read INTERFACE and MAKE A UNIQUE FUNCTION that ENCOMPASSES EVERYTHING.
  // Yes we can do that.
- 
+
  //Now, can we make a UNIQUE Function for filling the _bc fields, both for Nodes and for Elements?
  //One of the two is defined only on the FINE level, the other on ALL LEVELS
- 
+
  //BC is a property of the DOFS. Now, since to every DOF at any level has a corresponding FINE DOF,
  // and for consistency the bc_flag must be THE SAME at ALL LEVELS, then for the nodes
  // we have a UNIQUE FIELD for all levels.
- // Now, of course the DOF NUMBER CHANGES from one level to another. 
+ // Now, of course the DOF NUMBER CHANGES from one level to another.
  // But, the POSITION of the DofObject (= "source" of the dof number) in the _node_dof[Level]
  // is THE SAME!
  //That is why we have a lot of (-1) in the _node_dof map.
- 
+
  //Ok, now i did a UNIQUE FUNCTION GenerateBdc()
  // The point here is that for every equation I have to set TWO FUNCTIONS, bc_read and BCElemKKRead.
  //One is based on the NODE COORDINATE, one on the MIDDLE POINT of the BOUNDARY ELEMENT
@@ -80,36 +77,36 @@ namespace femus {
  //Then the problem is when you try to switch one Quantity from a NODE BASED FE Family to an ELEM BASED FE FAMILY
  //You have to change the way you  ENFORCE the BOUNDARY CONDITIONS.
  //=== the problem is that here we should write things better.
- // We should write things in such a way that if we set an equation WITHOUT VARIABLES the code still runs. 
+ // We should write things in such a way that if we set an equation WITHOUT VARIABLES the code still runs.
  // Here this does not happen.
  // if you allocate bc_flag with zero components, then you pass the pointer to the bc_read function which will set the components.
  // So you have to call the bc_read function only if the number of variables is not zero, and in the same way you have to call the function
  // BCElemKKRead only if the number of ElemBased variables is not zero!
- 
- 
+
+
  //SWITCHING one VARIABLE from KK to LL.
  // since the length of bc_value and bc_value_kk change, in the routine i cannot leave both selections fixed!
- 
+
  //Now the point is: I am sorry but we have to modify the structure of the boundary conditions...
  //I think we have to enforce the boundary conditions SEPARATELY for EACH QUANTITY
  //If the quantity is NODE-BASED, then we will use bc_read;
  //If the quantity is ELEMENT BASED, we will use bcelemKKread;
  //Now the point is only this: we want to do this in a UNIQUE routine,
- //so that we write the if's of the geometry only once. 
+ //so that we write the if's of the geometry only once.
  //I guess first of all I should base everything on the BOUNDARY MIDDLE POINT.
- 
+
 //As a matter of fact I am taking the nodes but these are taken in an element loop,
 // so actually i am not looping straight away on the nodes, so i have superimpositions anyway.
 //so YES, i'll base anything on the ELEMENT MIDDLE POINT!
 //Ok, I did that. Now the list of the bc for each scalar variable is only in one place, under bc_read
- 
+
 //Now that routine is done in such a way that you have to order FIRST QQ, THEN LL, THEN KK;
 //In this way you will read correctly
 
 //=== one thing that may be optimized here is that there are computations that could be avoided when you DO NOT HAVE QQ variables, or LL variables, or KK variables.
 
-// The good thing here would be to have a unique bc array at EACH LEVEL. 
-// The distinction between level is especially good for the elements, because the elements 
+// The good thing here would be to have a unique bc array at EACH LEVEL.
+// The distinction between level is especially good for the elements, because the elements
 //only belong to ONE level, it's not like the nodes...
 
 //=== now i am looping over elements first, and nodes inside each element next.
@@ -120,55 +117,55 @@ namespace femus {
 // 1 - because you loop over the boundary elements
 // 2 - because you loop over all faces which have "intersections"
 
-// I think we should do two routines for the flags: one that loops 
+// I think we should do two routines for the flags: one that loops
 // over the BOUNDARY ELEMENTS,
 // and one that loops over the VOLUME ELEMENTS.
 
-//So far, let us concentrate on the boundary loop. What is the way to check 
+//So far, let us concentrate on the boundary loop. What is the way to check
 //not to superimpose the ones on the zeros?
 //just put a check before checking
 
 //=== ricorda che i bc sono praticamente dei dof fields,
 // quindi in principio possono essere fatti in PARALLELO!
-// anche x_old e' un vettore di dof. Alla fine non sono cose 
+// anche x_old e' un vettore di dof. Alla fine non sono cose
 //molto diverse in fondo!
 
 //Quindi bisogna pensare ad una cosa piu' generale.
 //Faro' il bc come un Numeric Vector di INTERI,
 //cosi' come x_old e' un NumericVector di DOUBLE.
 
-//in questo modo il loop per riempire le bc 
+//in questo modo il loop per riempire le bc
 // o il loop per riempire x_old
 // non saranno molto diversi, anzi molto simili!
 
 //per come e' fatto il mio sistema,
 //direi che la cosa giusta e' fare le BC a TUTTI I LIVELLI.
 // in questo modo e' tutto molto piu' chiaro.
-//la cosa che devo capire un attimo e' come avere 
+//la cosa che devo capire un attimo e' come avere
 // il valore fisico A TUTTI I LIVELLI.
-//Per i nodi e' immediato, perche' un nodo coarser e' anche 
+//Per i nodi e' immediato, perche' un nodo coarser e' anche
 // un nodo fine.
-// Per un elemento coarser, bisogna fare cosi': ottieni la soluzione 
+// Per un elemento coarser, bisogna fare cosi': ottieni la soluzione
 // FINE per gli elementi. Poi la ridistribuisci sugli elementi coarse,
 // a tutti i livelli.
 
-//Se volessimo fare le cose ottimizzate, 
+//Se volessimo fare le cose ottimizzate,
 //dovremmo trattare cosi' lo STORAGE della SOLUZIONE:
-//Per i dof il cui dof object e' un NODO, 
+//Per i dof il cui dof object e' un NODO,
 // mettiamo in un vettore SOLO FINE.
 
 //per i dof il cui dof object e' un ELEMENTO,
 //mettiamo in un vettore DI TUTTI I LIVELLI.
 
-//in questo modo minimizzeremmo lo spazio di memoria, che mi sembra 
+//in questo modo minimizzeremmo lo spazio di memoria, che mi sembra
 //una cosa giusta, anche se si devono splittare un attimo queste cose.
 
 //il punto e' che se magari facciamo prima QQ, poi KK, poi LL,
-// avremmo dei pezzi separati. 
+// avremmo dei pezzi separati.
 //Ma non c'e' problema, perche' noi proprio all'atto della stampa
 //facciamo la separazione!
 //ora, dobbiamo farla anche durante l'ALGORITMO DI SOLUZIONE.
-//Pertanto, definiro' nell'equazione 
+//Pertanto, definiro' nell'equazione
 // un VETTORE di STORAGE NODALE per le VARIABILI NODALI
 // e un VETTORE di STORAGE di ELEMENTO per le VARIABILI DI ELEMENTO.
 
@@ -176,13 +173,13 @@ namespace femus {
 // and to PRINT ALL THE VARIABLES, node or cell.
 
 //
-
+// here the boundary conditions are STEADY-STATE right now
 void BoundaryConditions::GenerateBdc() {
-  
+
     const uint Lev_pick_bc_NODE_dof = _dofmap->_mesh._NoLevels - 1;  //we use the FINE Level as reference
-    
- //************************************************   
- //******** NODE BASED ****************************   
+
+ //************************************************
+ //******** NODE BASED ****************************
     const uint offset      = _dofmap->_mesh._NoNodesXLev[_dofmap->_mesh._NoLevels-1];
 
     std::vector<int> bc_flag(_dofmap->_n_vars);
@@ -193,24 +190,21 @@ void BoundaryConditions::GenerateBdc() {
     //both here and in bc_read you have to put the value bc=0
     //so that you get the IDENTITY OPERATOR and you only have to provide the
     //function for the RHS
- //******** NODE BASED ****************************   
- //***************************************************   
+ //******** NODE BASED ****************************
+ //***************************************************
 
- //**************************************************   
- //******** ELEM BASED ******************************  
+ //**************************************************
+ //******** ELEM BASED ******************************
 
-    _bc_fe_kk             =  new int*[_dofmap->_mesh._NoLevels];
     int* DofOff_Lev_kk    =  new int[_dofmap->_mesh._NoLevels];
-    
+
     for (uint Level=0; Level <_dofmap->_mesh._NoLevels; Level++)   { //loop over the levels
 
           DofOff_Lev_kk[Level] = _dofmap->_nvars[KK]*_dofmap->_DofNumLevFE[Level][KK];
-              _bc_fe_kk[Level] = new int[DofOff_Lev_kk[Level]];
 
-        for (int i=0; i < DofOff_Lev_kk[Level]; i++)    _bc_fe_kk[Level][i] = DEFAULT_BC_FLAG;
     }
- //******** ELEM BASED ******************************   
- //************************************************   
+ //******** ELEM BASED ******************************
+ //************************************************
 
  // Both the NODE BASED and the ELEM BASED are initialized to 1 over THE WHOLE VOLUME,
 // so over ALL THE DOFS.
@@ -219,24 +213,25 @@ void BoundaryConditions::GenerateBdc() {
 // because every Boundary NODE belongs to the VOLUME
 // and every Boundary ELEMENT communicates its value ("as a TRACE") to the corresponding VOLUME ELEM DOF.
 
- 
+
     for (uint Level=0; Level <_dofmap->_mesh._NoLevels;Level++)   { //loop over the levels
-      
+
   Mesh		*mymsh		=  _dofmap->_eqn->GetMLProb()._ml_msh->GetLevel(Level);
-    CurrentElem       currelem(Level,BB,_dofmap->_eqn,_dofmap->_mesh,_dofmap->_eqn->GetMLProb().GetElemType());
-    currelem.SetMesh(mymsh);
     const uint el_nnodes_b = mymsh->el->GetElementFaceDofNumber(ZERO_ELEM,ZERO_FACE,BIQUADR_FE);
-	
+
         for (uint isubd=0; isubd<_dofmap->_mesh._NoSubdom; ++isubd) {
             uint iel_b = _dofmap->_mesh._off_el[BB][ _dofmap->_mesh._NoLevels*isubd + Level];
             uint iel_e = _dofmap->_mesh._off_el[BB][ _dofmap->_mesh._NoLevels*isubd + Level+1];
+
             for (uint iel=0; iel < (iel_e - iel_b); iel++) {
 
-	        currelem.SetDofobjConnCoords(isubd,iel);
+                CurrentElem       currelem(iel,isubd,Level,BB,_dofmap->_eqn,_dofmap->_mesh,_dofmap->_eqn->GetMLProb().GetElemType(),mymsh);
+
+	        currelem.SetDofobjConnCoords();
                 currelem.SetMidpoint();
-		
+
  	    for (uint ivar=0; ivar< _dofmap->_n_vars; ivar++)  bc_flag[ivar] = DEFAULT_BC_FLAG; //this is necessary here to re-clean!
- 	    
+
       uint count = 0;
         for (uint i = 0; i < _dofmap->_eqn->GetUnknownQuantitiesVector().size(); i++) {
 	  std::vector<int>  bc_temp(_dofmap->_eqn->GetUnknownQuantitiesVector()[i]->_dim,DEFAULT_BC_FLAG);
@@ -245,10 +240,10 @@ void BoundaryConditions::GenerateBdc() {
 	    bc_flag[count] = bc_temp[j];
 	    count++;
 	  }
-	} 
+	}
 
-  //******************* ONLY FINE LEVEL, NODE VARS ***************** 
-   if (Level == Lev_pick_bc_NODE_dof)  { 
+  //******************* ONLY FINE LEVEL, NODE VARS *****************
+   if (Level == Lev_pick_bc_NODE_dof)  {
                 for (uint i=0; i<  el_nnodes_b; i++)  {
                         const uint fine_node = _dofmap->_mesh._el_map[BB][(iel+iel_b)*el_nnodes_b+i];
 
@@ -266,32 +261,28 @@ void BoundaryConditions::GenerateBdc() {
                         }
                     }
                 } // i
-                
-           }
-   //******************* END ONLY FINE LEVEL ***************** 
 
- //******************* ALL LEVELS, ELEM VARS ***************** 
+           }
+   //******************* END ONLY FINE LEVEL *****************
+
+ //******************* ALL LEVELS, ELEM VARS *****************
 		 int sum_elems_prev_sd_at_lev = 0;
                  for (uint pr = 0; pr < isubd; pr++) { sum_elems_prev_sd_at_lev += _dofmap->_mesh._off_el[BB][_dofmap->_mesh._NoLevels*pr + Level + 1] - _dofmap->_mesh._off_el[BB][ _dofmap->_mesh._NoLevels*pr + Level]; }
-		 
+
 		 int bdry_iel_lev =  iel + sum_elems_prev_sd_at_lev;
 		 int vol_iel =  _dofmap->_mesh._el_bdry_to_vol[Level][bdry_iel_lev];
-		 
- 	        for (uint ivar= 0; ivar < _dofmap->_nvars[KK];  ivar++)  { 
-		  int dof_kk_pos_lev =  vol_iel + ivar*_dofmap->_DofNumLevFE[Level][KK];
-	            if (_bc_fe_kk[Level][ dof_kk_pos_lev ] != 0)  _bc_fe_kk[Level][ dof_kk_pos_lev ] = bc_flag[ ivar + _dofmap->_VarOff[KK] ];
-		}
-//******************* END ALL LEVELS, ELEM VARS **************   
-                 
+
+//******************* END ALL LEVELS, ELEM VARS **************
+
             } // end of element loop
         }  // end subdomain
-        
+
      }//end nolevels
-       
+
         std::cout << "\n GenerateBdc: boundary conditions defined by  bc_read" << "\n \n";
- 
+
     delete []DofOff_Lev_kk;
-   
+
     return;
 }
 
@@ -301,194 +292,8 @@ void BoundaryConditions::GenerateBdc() {
 
 
 
-//===========================================
-/////////////////// ELEM BC ////////////////////
-///////////////////////////////
-///    el_flag[0] = pressure integral (yes=1 or no=0)
-///    el_flag[1] = stress integral
-///    el_flag[2] = normal component of velocity (fixed=yes=1)
-///   el_flag[3] = tangential component(-s)
-
-//elembc
-//this must only pick my _iproc and my Level
-//so what is the length of this per proc and per level?
-//clearly, here we do not know in which level we are, so we must
-//compute the lengths for every processor and every level
-//well, when we first allocate the vector, since it is serial,
-//we allocate it to the maximum length
-//then, it is when we FILL it that we have to take care of the correct range
-//we'll have to do a map for each LEVEL, how do we do that?
-
-//this map only takes into account the fine level, but how do i consider all the levels?
-//for the dofs, you just do it for the FINE LEVEL, because then a FINE node is also a coarser node
-//what could we do here?Once we pick the el_xm we must know at which level we are.
-//Well,actually we can pick the boundary element by its iel, like one does for the connectivity
-//if the iel is in that range, compute the middle point and fill the _elem_bc
-
-//---------> WHAT IS THE PROBLEM ABOUT THIS FUNCTION?
-//---- Why does the get_el_nod_conn(BB,..) work in GenMatRhs
-//but HERE it doesnt?
-//I think because here we are looping over ALL LEVELS and ALL SUBDOMAINS (procs)
-//while in the GenMatRhs every processor
-//does HIS OWN SUBDOMAIN (_iproc)
-// and ONE LEVEL AT A TIME (Level)!
-//instead, here every single processor does all of this!
-//it is a SERIAL routine
-//instead, in GenMatRhs every processor does HIS OWN PART, BOTH AT VOLUME and AT BOUNDARY
-//do we have to loop over
-
-//each processor does the loop over ALL the PROCESSORS, because this routine is serial
-
-//compute the elem middle point
-//we are on the boundary, so we are doing Quad9
-//why was it always working with MORE THAN ONE LEVEL?
-//it seems like the boundary connectivity map with ONE level and MORE THAN TWO PROCS doesnt work...
-
-//here, I distinguished the levels.
-//can i think of something like the dofs, where you can do all the things only at the FINE LEVEL?
-//if a dof is fine, it is also coarse,
-//if an element is fine, is it also coarse? no
-//if an element is coarse, is it also fine? no
-//if a flag is set on a fine element, then can i obtain the corresponding COARSE flag?
-//you have to know the SONS of your FATHER element
-//let us do a map with THREE indices:
-//first: processor
-//second: level
-//third: iel
-//well, the el_connectivity goes first by proc then by level,
-//so we decide to follow the el_connectivity
-//no, i think that i should put first the small range indices, then the larger ones
-//i wont use more than 4-5 level
-//i may want to use a lot of processors
-//every processor at every level may have a lot of elements
-
-//this routine is GENERAL. The only thing that is NOT GENERAL is the use of 4 element boundary flags
-// and of ONE normal value and ONE tangential VALUE
-//for now, we will leave things like this
-
-// // // // // void BoundaryConditions::GenerateBdcElem()  {
-// // // // // 
-// // // // //      CurrentElem       currelem(BB,_dofmap->_eqn,_dofmap->_mesh,_dofmap->_eqn->GetMLProb().GetElemType());  
-// // // // //     currelem.SetMesh(mymsh);
-// // // // //   
-// // // // //       uint space_dim = _dofmap->_mesh.get_dim();
-// // // // // 
-// // // // //     _elem_bc       =  new int**[_dofmap->_mesh._NoLevels];
-// // // // //     _elem_val_norm =  new double**[_dofmap->_mesh._NoLevels];
-// // // // //     _elem_val_tg   =  new double**[_dofmap->_mesh._NoLevels];
-// // // // // 
-// // // // //     for (uint Level=0; Level <_dofmap->_mesh._NoLevels;Level++)   { //loop over the levels
-// // // // // 
-// // // // //         _elem_bc[Level]       = new int*[_dofmap->_mesh._NoSubdom];//4*_mesh._n_elements_vb_lev[BB][Level] this was wrong, actually it is L + P*NoLevels, i wasnt considering the others but it was working! For instance in two D the numbers for the two procs are the same, here's why!
-// // // // //         _elem_val_norm[Level] = new double*[_dofmap->_mesh._NoSubdom];//_mesh._n_elements_vb_lev[BB][Level]
-// // // // //         _elem_val_tg[Level]   = new double*[_dofmap->_mesh._NoSubdom];//_mesh._n_elements_vb_lev[BB][Level]
-// // // // // 
-// // // // //         for (uint isubd = 0; isubd < _dofmap->_mesh._NoSubdom;++isubd) {  //loop over the subdomains
-// // // // // 
-// // // // //             uint iel_b = _dofmap->_mesh._off_el[BB][ _dofmap->_mesh._NoLevels*isubd +  Level];
-// // // // //             uint iel_e = _dofmap->_mesh._off_el[BB][ _dofmap->_mesh._NoLevels*isubd +  Level+1];
-// // // // // 
-// // // // //             _elem_bc[Level][isubd]  = new int[/*4*/2*(iel_e-iel_b)]; /*normal and tangential*/ //4*_mesh._n_elements_vb_lev[BB][Level+isubd*_dofmap->_mesh._NoLevels] that was not correct
-// // // // //             _elem_val_norm[Level][isubd]  = new double[ 1*(iel_e-iel_b) ];  //_mesh._n_elements_vb_lev[BB][Level+isubd*_dofmap->_mesh._NoLevels]
-// // // // // 
-// // // // //             _elem_val_tg[Level][isubd]  = new double[ _number_tang_comps[space_dim - 1]*(iel_e-iel_b) ];   //_mesh._n_elements_vb_lev[BB][Level+isubd*_dofmap->_mesh._NoLevels]
-// // // // // 
-// // // // //             for (uint iel=0;iel < (iel_e - iel_b); iel++) {  //loop over the elems of that level&subdomain
-// // // // // 
-// // // // //                 int surf_id=0;  //could do this outside also
-// // // // //                 int     el_flag[2] = {0,0};
-// // // // //                 std::vector<double> el_value(1 + _number_tang_comps[space_dim - 1],0.); //1 normal and 1 tangential or 1 normal and 3 tangential
-// // // // // 
-// // // // //                 currelem.SetDofobjConnCoords(isubd,iel);
-// // // // //                 currelem.SetMidpoint();
-// // // // // 
-// // // // //                 //read the bc's //the read forgets all levels and subdomains, it is only based on the MIDDLE POINT
-// // // // //                 elem_bc_read(currelem.GetMidpoint(),surf_id,&el_value[0],el_flag);
-// // // // // 
-// // // // //                 std::cout << "Bdry " << surf_id << " normal: " <<  el_flag[0] << " tang: " <<  el_flag[1] << std::endl;
-// // // // // 
-// // // // //                 //store the bc's
-// // // // //                 _elem_bc[Level][isubd][/*4*/2*iel]   =  el_flag[0];
-// // // // //                 _elem_bc[Level][isubd][/*4*/2*iel+1] =  el_flag[1];
-// // // // //                 /*              _elem_bc[Level][isubd][4*iel+2] =  el_flag[2];
-// // // // //                               _elem_bc[Level][isubd][4*iel+3] =  el_flag[3];*/
-// // // // //                 _elem_val_norm[Level][isubd][iel]   = el_value[0];
-// // // // //  
-// // // // // 		for (uint i=0; i< _number_tang_comps[space_dim - 1]; i++) {
-// // // // // 		  _elem_val_tg[Level][isubd][ _number_tang_comps[space_dim-1]*iel + i ] = el_value[1+i];
-// // // // // 		}
-// // // // // // // //   WAS
-// // // // // // // // #if dimension==2
-// // // // // // // //                 _elem_val_tg[Level][isubd][iel]   = el_value[1];
-// // // // // // // // #elif dimension==3
-// // // // // // // //                 _elem_val_tg[Level][isubd][3*iel]   = el_value[1];
-// // // // // // // //                 _elem_val_tg[Level][isubd][3*iel+1]   = el_value[2];
-// // // // // // // //                 _elem_val_tg[Level][isubd][3*iel+2]   = el_value[3];
-// // // // // // // // 
-// // // // // // // // #endif
-// // // // // 
-// // // // //             }
-// // // // //         }
-// // // // // 
-// // // // //     }//end nolevels
-// // // // // 
-// // // // // 
-// // // // //     return;
-// // // // // }
 
 
-// ///////////////////////////////
-// void BoundaryConditions::Bc_GetElFlagValLevSubd(const uint Level,const uint isubd,const uint iel,int* el_flag,double* el_value ) const {
-// 
-//     el_flag[0] =        _elem_bc[Level][isubd][/*4*/2*iel]   ;
-//     el_flag[1] =        _elem_bc[Level][isubd][/*4*/2*iel+1] ;
-//     /*    el_flag[2] =        _elem_bc[Level][isubd][4*iel+2] ;
-//         el_flag[3] =        _elem_bc[Level][isubd][4*iel+3] ;*/
-//     el_value[0] =  _elem_val_norm[Level][isubd][iel]   ;
-// 
-//   uint space_dim = _dofmap->_mesh.get_dim();
-// 
-//   for (uint i=0; i < _number_tang_comps[space_dim - 1]; i++) el_value[1+i] = _elem_val_tg[Level][isubd][ _number_tang_comps[space_dim - 1]*iel + i ];
-//     
-// // // //   WAS
-// // #if dimension==2
-// //     el_value[1] =    _elem_val_tg[Level][isubd][iel]   ;
-// // #elif dimension==3
-// //     el_value[1] =    _elem_val_tg[Level][isubd][3*iel]   ;
-// //     el_value[2] =    _elem_val_tg[Level][isubd][3*iel+1]   ;
-// //     el_value[3] =    _elem_val_tg[Level][isubd][3*iel+2]   ;
-// // #endif
-// 
-//     return;
-// }
-
-
-
-// ////////////////////////////////
-// void BoundaryConditions::clearElBc() {
-// 
-//     for (uint Level=0; Level <_dofmap->_mesh._NoLevels;Level++)   {
-// 
-//         for (uint isubd=0;isubd<_dofmap->_mesh._NoSubdom;++isubd) {
-//             delete [] _elem_bc[Level][isubd];
-//             delete [] _elem_val_norm[Level][isubd];
-//             delete [] _elem_val_tg[Level][isubd];
-//         }
-// 
-//         delete [] _elem_bc[Level];
-//         delete [] _elem_val_norm[Level];
-//         delete [] _elem_val_tg[Level];
-// 
-//     }
-// 
-//     delete [] _elem_bc;
-//     delete [] _elem_val_norm;
-//     delete [] _elem_val_tg;
-// 
-//     return;
-// }
-
-/////////////////// ELEM BC ////////////////////
 
 
 
@@ -497,7 +302,7 @@ void BoundaryConditions::GenerateBdc() {
 //here, we could pass a std::VECTOR of the UNKNOWN INTERNAL QUANTITIES,
 //not a map because we want things to be ordered.
 //this vector must be passed to the EqnNS constructor so that it can be passed
-//to the DA. 
+//to the DA.
 //so we must do things OUTSIDE the NS constructor, i.e. in the MultiLevelProblemTwo.
 //We cannot do INSIDE the NS constructor because it is called AFTER the DA constructor.
 //where Velocity is in the first place and pressure is in the second
@@ -508,7 +313,7 @@ void BoundaryConditions::GenerateBdc() {
 //then you do not use the quadratics
 //BUT, we decided to have every shape funcs and stuff
 //both for QQ and for LL
-//So, we'll leave these like that, 
+//So, we'll leave these like that,
 //so that linear temperature can get velocity values from QUADRATIC velocity
 //but, actually, we should do that only the things for the INVOLVED ORDERS
 // (Internally INVOLVED and Externally INVOLVED) are first allocated HERE
@@ -517,8 +322,8 @@ void BoundaryConditions::GenerateBdc() {
 //for the involved quantities
 //clearly, it is important that these "new" and delete things are not done INSIDE
 //the Gauss loop but OUTSIDE, a priori
-//the problem is that in order to know these we must do a loop 
-//not only over the Internal Quantities but also the EXTERNAL ones  
+//the problem is that in order to know these we must do a loop
+//not only over the Internal Quantities but also the EXTERNAL ones
 //because they need to be interpolated as well!
 //also, once we know which orders are involved, it is not absolutely immediate
 // what DERIVATIVE orders need to be actually filled: phi,dphidxezeta, dphidxyz,dphidxyz3D
@@ -535,7 +340,7 @@ void BoundaryConditions::GenerateBdc() {
 //===============related to the SINGLE EQUATION
 //=========number of variables
 //the number of variables of my own equation must be deduced from the INTERNAL QUANTITIES
-//now let us consider TWO internal quantities 
+//now let us consider TWO internal quantities
 //the InternalVector actually belongs to the BASE class,
 //but n_vars[] belongs to THIS class
 //so, we must consider that we have to turn things into QUADRATIC and LINEAR,
@@ -555,7 +360,7 @@ void BoundaryConditions::GenerateBdc() {
 //----so, we have to understand where they are called.
 //_fe[0] must be called for being the _fe of quadratic,
 //not for being the fe of velocity...
-//well, actually i think that all the variables are treated here for being 
+//well, actually i think that all the variables are treated here for being
 //quadratic or linear variables
 
 
@@ -567,8 +372,8 @@ void BoundaryConditions::GenerateBdc() {
 
 
 
- 
- 
+
+
 
 
 
@@ -593,9 +398,9 @@ void BoundaryConditions::GenerateBdc() {
 // you need to know how the dofmap behaves.
 // For now, and throughout the code, there is no dofmap class to handle this thing.
 //But, the dofmap is always like this: First the quadratic variables, then the linear variables
-//also, el_conn is always quadratic and trhis is not a problem, since 
+//also, el_conn is always quadratic and trhis is not a problem, since
 //you only have to loop over the vertices which are the FIRST in the connectivity order.
-//so, (idim+ var_off)*dof_off_gl 
+//so, (idim+ var_off)*dof_off_gl
 //myvect can be either quadratic or linear
 //if myvect == QQ, varoff=0
 //if myvect == LL, varoff=nvars_q. So this depends on the DA equation in which I find myself.
@@ -612,11 +417,11 @@ void BoundaryConditions::GenerateBdc() {
 //so, if both variables are linear, you have that lin_off = 0, because nodedof starts with linear stuff;
 //but then, while Velocity is the First and it starts right at the beginning, Pressure
 //starts right after velocity.
-//So, for every DA equation, instead of distinguishing between 
+//So, for every DA equation, instead of distinguishing between
 //the QUADRATIC variables and the LINEAR variables
 //We distinguish between a FIRST Quantity and a SECOND Quantity
 //(later we will do just a LIST of MORE Ordered Quantities)
-//based on them we have the number of variables nvars[FIRST] and nvars[SECOND] and 
+//based on them we have the number of variables nvars[FIRST] and nvars[SECOND] and
 //so we can turn them into nvars[QQ] and nvars[LL],
 //on which all the loops are based
 //So, we'll have that for the FIRST Quantity the offset is ZERO,
@@ -635,26 +440,26 @@ void BoundaryConditions::GenerateBdc() {
 //**************************************************
 //here, we should explicitly pass the THREE QUANTITIES,
 // or better a vector of Quantities;
-//the structures of nodedof 
+//the structures of nodedof
 // and bc_eldofs
-// are both ordered 
-// first by QUADRATIC and 
+// are both ordered
+// first by QUADRATIC and
 // then by LINEAR variables.
-//But, the Vect we provide are ordered 
+//But, the Vect we provide are ordered
 // by the way we provide them...
 //so they may be first quadratic then linear then quadratic...
-//we should remember the passage from the initial order 
+//we should remember the passage from the initial order
 //to the QL order...
-//Since later you fill the matrix based on the 
+//Since later you fill the matrix based on the
 //QL order, so you explicitly do what the initvectors
 //does at the beginning,
 //the point is that you must pay attention to
 //the order given at the BEGINNING
-//So we have a hybrid reasoning: 
-// by List of Quantities 
-// and 
+//So we have a hybrid reasoning:
+// by List of Quantities
+// and
 // by List of Quadratic and Linear Variables.
-//here we are picking things from structures 
+//here we are picking things from structures
 //that are all ordered by QL variables
 //but some of those are distinguished by Quantity...
 
@@ -673,17 +478,17 @@ void BoundaryConditions::GenerateBdc() {
 
 
 //I'll do the version for a vector of Vect
-//when you explore the global structures, 
+//when you explore the global structures,
 //they all have the structure with quadratic and linear
 //distinguished, and ordered, first quadratic then linear.
 //So we have to explore these with nvars[QQ] and nvars[LL]
-//Now, the point is: when we want to explore the xold 
-//to retrieve the dof values, we have to do the inverse 
-//path that allowed us to 
+//Now, the point is: when we want to explore the xold
+//to retrieve the dof values, we have to do the inverse
+//path that allowed us to
 //the first quadratic goes to the first quantity
 //the second quadratic goes to the second quantity
 //the third quadratic goes to the third quantity... and so on...
-//in that case you have to consider that you may have 
+//in that case you have to consider that you may have
 //more variables for a single quantity
 //we can say:we loop over the quantities,
 // in the order we gave
@@ -691,7 +496,7 @@ void BoundaryConditions::GenerateBdc() {
 //if they are linear, we pick the dofs from the linear part.
 //then, we must keep in mind the current cursor for both the quadratic and the linear parts
 //E' possibile fare in modo che tutto sia costruito sulle quantities?
-//beh, in qualche modo, quando riempi i pezzi della matrice di elemento, 
+//beh, in qualche modo, quando riempi i pezzi della matrice di elemento,
 // ti servira' una distinzione per componenti... anche se sicuramente avere la quantita'
 //tutta insieme ti puo' permettere di scrivere in modo compatto
 //certi operatori specie su strutture vettoriali
@@ -711,24 +516,24 @@ void BoundaryConditions::GenerateBdc() {
 //e in base a quello mettere una incognita oppure un'altra
 
 //TODO: Now, we are MULTILEVEL. Nevertheless, the boundary conditions are imposed
-//only on the FINE LEVEL. Now, the point is that the DofObj for 
+//only on the FINE LEVEL. Now, the point is that the DofObj for
 //Now, the boundary conditions are imposed by NODE COORDINATES,
 // lopping over ALL THE NODES, also the VOLUME NODES.
-// Then, you distinguish the BOUNDARY NODES from the VOlUME nodes 
+// Then, you distinguish the BOUNDARY NODES from the VOlUME nodes
 // by the COORDINATES
-// In the same way, we will distinguish the VOLUME ELEMENTS from the 
+// In the same way, we will distinguish the VOLUME ELEMENTS from the
 // BOUNDARY elements by the COORDINATES of the CENTER.
 // the point is that we are talking about the VOLUME ELEMENTS,
 // so we do not know how big they are for putting ifs on the coordinates
 // Then, we will loop over volume elements;
-// if a volume element HAS a FACE ON THE BOUNDARY, 
+// if a volume element HAS a FACE ON THE BOUNDARY,
 // and if that face satisfies the "LINE CONDITION" on the boundary,
 // then SET the corresponding BC.
-// The point is that we need the list of faces for each element, 
+// The point is that we need the list of faces for each element,
 // and then the coordinates of the nodes of each face.
 // so, so far, let me avoid all this stuff and put the boundary conditions
 // only on the QQ and LL
-// The important thing to remember is that the bc_flag 
+// The important thing to remember is that the bc_flag
 // is a flag that is associated to EACH DOF,
 // in particular to EACH ROW.
 
@@ -741,10 +546,10 @@ void BoundaryConditions::GenerateBdc() {
 //Therefore, an alternative would be: starting from the dofs, can we retrieve
 //what their dof carriers are?
 //Well, the point is that for purpose of domain decomposition
-// it is natural to loop over elements, and so it is natural 
+// it is natural to loop over elements, and so it is natural
 // to say: what are the DOF CARRIERS in this element?
 // Well, on the other hand, one might say: what are the DOFS in this element?
-//But, since you are in an element, to retrieve the dofs you necessarily start from 
+//But, since you are in an element, to retrieve the dofs you necessarily start from
 //the GEOMETRICAL ENTITIES that are available to you in there.
 //So, from "DOF CARRIER" to DOF is a "GEOMETRICAL approach"
 //Instead, from DOF to "DOF CARRIER" would be an "ALGEBRAIC approach"...,
@@ -757,8 +562,8 @@ void BoundaryConditions::GenerateBdc() {
 
 
 
-  
-  
+
+
 
 //============================
 //glnode may be a multiple of the node number,
@@ -773,8 +578,8 @@ void BoundaryConditions::GenerateBdc() {
 
 void BoundaryConditions::Bc_ScaleDofVec(NumericVector* myvec,  double ScaleFac /*, dimension */ ) {
 //only works with Level = NoLevels - 1 , because bc is only on the finest level
-  
-  //pass the pointer to the array,the dimension of the array, and the scale factor  
+
+  //pass the pointer to the array,the dimension of the array, and the scale factor
 //remember that these vectors we pick are made by quadratic and linear parts,
 //so we actually know what kind of vector these are => the dimension can be taken from _Dim
 
@@ -785,31 +590,31 @@ void BoundaryConditions::Bc_ScaleDofVec(NumericVector* myvec,  double ScaleFac /
 
 
 for (uint i=0; i < _dofmap->_Dim[_dofmap->_mesh._NoLevels-1]; i++) { //loop over all the dofs, both quadratic and linear
-  
+
   if (_bc[i] == 1 ) {  //if the dofs are not fixed, scale them
-  
+
     myvec->set( i, (*myvec)(i)*ScaleFac );
 
   }
 
 }
-  
-  
-  
- return; 
+
+
+
+ return;
 }
 
 //add only where boundary conditions are not fixed
 void BoundaryConditions::Bc_AddDofVec(NumericVector* vec_in,NumericVector* vec_out ) {
 
-for (uint i=0; i < _dofmap->_Dim[_dofmap->_mesh._NoLevels-1]; i++) { 
+for (uint i=0; i < _dofmap->_Dim[_dofmap->_mesh._NoLevels-1]; i++) {
 
     if (_bc[i] == 1 ) {
-  
+
       vec_out->add (i,(*vec_in)(i));
 
     }
-  
+
 }
 
 return;
@@ -818,15 +623,15 @@ return;
 
 void BoundaryConditions::Bc_AddScaleDofVec(NumericVector* vec_in,NumericVector* vec_out,const double ScaleFac ) {
 //add a vector multiplied by a constant (only where it is not fixed)
-  
-for (uint i=0; i < _dofmap->_Dim[_dofmap->_mesh._NoLevels-1]; i++) { 
+
+for (uint i=0; i < _dofmap->_Dim[_dofmap->_mesh._NoLevels-1]; i++) {
 
     if (_bc[i] == 1 ) {
-  
+
       vec_out->add (i,(*vec_in)(i)*ScaleFac);
 
     }
-  
+
 }
 
 return;
@@ -843,15 +648,15 @@ return;
 //the imposition of the boundary conditions is related to the Equation.
 //Clearly, it depends on the domain
 //So for different domains we would have different parts here, with if's.
-//We cannot associate this function to the Box or the Cylinder because 
+//We cannot associate this function to the Box or the Cylinder because
 //it depends on the OPERATORS involved in the EQUATION,
 //so it must stay stick to the Equation, which is a bunch of operators
-//every application has only one domain, but if you want to use different 
+//every application has only one domain, but if you want to use different
 //domains in the same equation you have to specify it here...
 //also, changing the domain would mean changing the functions in the Physics User Quantities,
 //so in general we do not automatically switch the domain so quickly
 
-//So, for every Domain we have a different implementation 
+//So, for every Domain we have a different implementation
 // of this function
 //The idea is: i have to get the Box from where i put it.
 //The point is that i set it as a domain but it is also a Box
@@ -861,142 +666,142 @@ return;
 
 // // // // // void BoundaryConditions::elem_bc_read(const double el_xm[],int& surf_id, double value[],int el_flag[]) const {
 // // // // // //el_xm[] is the NON-DIMENSIONAL node coordinate // lb,le are NONDIMENSIONALIZED
-// // // // // 
+// // // // //
 // // // // // const double bdry_toll = DEFAULT_BDRY_TOLL;
-// // // // // 
-// // // // //   
-// // // // // 
+// // // // //
+// // // // //
+// // // // //
 // // // // // Box* box= static_cast<Box*>(_dofmap->_mesh.GetDomain());
-// // // // // 
+// // // // //
 // // // // //   std::vector<double>  lb(_dofmap->_mesh.get_dim());
 // // // // //   std::vector<double>  le(_dofmap->_mesh.get_dim());
 // // // // //   lb[0] = box->_lb[0];//already nondimensionalized
 // // // // //   le[0] = box->_le[0];
 // // // // //   lb[1] = box->_lb[1];
 // // // // //   le[1] = box->_le[1];
-// // // // //   
+// // // // //
 // // // // //  if (_dofmap->_mesh.get_dim() == 3)  {
 // // // // //   lb[2] = box->_lb[2];
 // // // // //   le[2] = box->_le[2];
 // // // // //   }
-// // // // //   
+// // // // //
 // // // // //   std::vector<double> x_rotshift(_dofmap->_mesh.get_dim());
 // // // // //   _dofmap->_mesh._domain->TransformPointToRef(el_xm,&x_rotshift[0]);
-// // // // // 
-// // // // //  
+// // // // //
+// // // // //
 // // // // //   if (_dofmap->_mesh.get_dim() == 2)  {
-// // // // // 
+// // // // //
 // // // // //   if ( (x_rotshift[0]) > -bdry_toll && ( x_rotshift[0]) < bdry_toll ) { //left
-// // // // // surf_id=44; 
+// // // // // surf_id=44;
 // // // // //      el_flag[NN]=1;
-// // // // //      el_flag[TT]=1;   
+// // // // //      el_flag[TT]=1;
 // // // // //   value[NN]=0.;
 // // // // //   value[TT]=0.;/*-4.*/
-// // // // //     
+// // // // //
 // // // // //   }
-// // // // // 
-// // // // // 
+// // // // //
+// // // // //
 // // // // //  if ( (le[0]-lb[0])  -(x_rotshift[0]) > -bdry_toll && (le[0]-lb[0]) -(x_rotshift[0]) < bdry_toll){ //right
-// // // // // surf_id=66; 
-// // // // //      el_flag[NN]=1; 
+// // // // // surf_id=66;
+// // // // //      el_flag[NN]=1;
 // // // // //      el_flag[TT]=1;
 // // // // //        value[NN]=0.;
-// // // // //        value[TT]=0.;/*+4.*/ 
+// // // // //        value[TT]=0.;/*+4.*/
 // // // // // }
-// // // // //   
+// // // // //
 // // // // //    if (( x_rotshift[1]) > -bdry_toll && ( x_rotshift[1]) < bdry_toll)  { //bottom
-// // // // // surf_id=22; 
-// // // // // 
+// // // // // surf_id=22;
+// // // // //
 // // // // //       el_flag[NN]=0;    //no normal component
 // // // // //       el_flag[TT]=1;    //yes tangential component
 // // // // //         value[NN]=0.;
 // // // // //         value[TT]=0.;
 // // // // // }
-// // // // //   
+// // // // //
 // // // // //   if ((le[1]-lb[1]) -(x_rotshift[1]) > -bdry_toll &&  (le[1]-lb[1]) -(x_rotshift[1]) < bdry_toll)  { //top
 // // // // //  surf_id=88;
-// // // // // 
+// // // // //
 // // // // //      el_flag[NN]=0;     //no normal component
 // // // // //      el_flag[TT]=1;     //yes tangential component
 // // // // //        value[NN]=0.;
 // // // // //        value[TT]=0.;
-// // // // //     
+// // // // //
 // // // // //   }
-// // // // //   
+// // // // //
 // // // // //   }  //end dim 2
-// // // // //   
+// // // // //
 // // // // //   else if (_dofmap->_mesh.get_dim() == 3)  {
-// // // // // 
-// // // // //   
+// // // // //
+// // // // //
 // // // // //  if ( x_rotshift[0] > -bdry_toll &&  x_rotshift[0] < bdry_toll ) { //left
-// // // // // surf_id=44;  
+// // // // // surf_id=44;
 // // // // //      el_flag[NN]=1;    //yes normal component
 // // // // //      el_flag[TT]=1;    //yes tang component
-// // // // //   value[NN]=0.;  //value of the normal 
+// // // // //   value[NN]=0.;  //value of the normal
 // // // // //   value[1]=0.;  //value of the tangential
 // // // // //   value[2]=0.;  //value of the  tangential
 // // // // //   value[3]=0.;  //value of the tangential
 // // // // //   }
-// // // // //   
+// // // // //
 // // // // //  if ( (le[0]-lb[0])  - x_rotshift[0] > -bdry_toll && (le[0]-lb[0]) -x_rotshift[0] < bdry_toll){ //right
 // // // // // surf_id=66;
-// // // // //      el_flag[NN]=1;    //yes normal component 
+// // // // //      el_flag[NN]=1;    //yes normal component
 // // // // //      el_flag[TT]=1;    //yes tang component
-// // // // //   value[NN]=0.;  //value of the normal 
+// // // // //   value[NN]=0.;  //value of the normal
 // // // // //   value[1]=0.;  //value of the tangential
 // // // // //   value[2]=0.;  //value of the  tangential
 // // // // //   value[3]=0.;  //value of the tangential
-// // // // //    
+// // // // //
 // // // // // }
-// // // // //   
+// // // // //
 // // // // //    if (( x_rotshift[1]) > -bdry_toll && ( x_rotshift[1]) < bdry_toll)  { //bottom
-// // // // // 
+// // // // //
 // // // // //    surf_id=22;
-// // // // // 
+// // // // //
 // // // // //      el_flag[NN]=0;    //no normal component
 // // // // //      el_flag[TT]=1;    //yes tang component
-// // // // //   value[NN]=0.;  //value of the normal 
+// // // // //   value[NN]=0.;  //value of the normal
 // // // // //   value[1]=0.;  //value of the tangential
 // // // // //   value[2]=0.;  //value of the  tangential
 // // // // //   value[3]=0.;  //value of the tangential
 // // // // //   }
-// // // // // 
+// // // // //
 // // // // //   if ((le[1]-lb[1]) -(x_rotshift[1]) > -bdry_toll &&  (le[1]-lb[1]) -(x_rotshift[1]) < bdry_toll)  { //top
 // // // // // surf_id=88;
-// // // // // 
+// // // // //
 // // // // //      el_flag[NN]=0;    //no normal component
 // // // // //      el_flag[TT]=1;    //yes tang component
-// // // // //   value[NN]=0.;  //value of the normal 
+// // // // //   value[NN]=0.;  //value of the normal
 // // // // //   value[1]=0.;  //value of the tangential
 // // // // //   value[2]=0.;  //value of the  tangential
 // // // // //   value[3]=0.;  //value of the tangential
 // // // // //   }
-// // // // //   
+// // // // //
 // // // // //  if ( x_rotshift[2] > -bdry_toll &&  x_rotshift[2] < bdry_toll ) { //symmetry
-// // // // // 
+// // // // //
 // // // // // surf_id=11;
-// // // // // 
+// // // // //
 // // // // //      el_flag[NN]=1;    //yes normal (equal to zero)
 // // // // //      el_flag[TT]=0;    //no tangential (symmetry)
-// // // // //   value[NN]=0.;  //value of the normal 
+// // // // //   value[NN]=0.;  //value of the normal
 // // // // //   value[1]=0.;  //value of the tangential
 // // // // //   value[2]=0.;  //value of the  tangential
 // // // // //   value[3]=0.;  //value of the tangential
 // // // // //   }
 // // // // //   if ((le[2]-lb[2]) - x_rotshift[2] > -bdry_toll &&  (le[2]-lb[2]) -x_rotshift[2] < bdry_toll)  {
-// // // // // surf_id=77; 
+// // // // // surf_id=77;
 // // // // //      el_flag[NN]=1;    //yes normal component //it can be zero also i think
 // // // // //      el_flag[TT]=0;    //no tang component
-// // // // //   value[NN]=0.;  //value of the normal 
+// // // // //   value[NN]=0.;  //value of the normal
 // // // // //   value[1]=0.;  //value of the tangential
 // // // // //   value[2]=0.;  //value of the tangential
 // // // // //   value[3]=0.;  //value of the tangential
-// // // // //   
+// // // // //
 // // // // //   }
-// // // // // 
+// // // // //
 // // // // //   } //end dim 3
-// // // // // 
-// // // // // 
+// // // // //
+// // // // //
 // // // // //   return;
 // // // // // }
 

@@ -27,13 +27,16 @@ namespace femus {
 
 
 
-    CurrentElem::CurrentElem(const uint level, const uint vb, const SystemTwo * eqn_in, const MultiLevelMeshTwo& mesh, const std::vector< std::vector<const elem_type*> >  & elem_type_in ):
+    CurrentElem::CurrentElem(const uint iel_in, const uint iproc_in, const uint level, const uint vb, const SystemTwo * eqn_in, const MultiLevelMeshTwo& mesh, const std::vector< std::vector<const elem_type*> >  & elem_type_in, const Mesh * mesh_new ):
     _eqn(eqn_in),
     _mesh(mesh),
     _dim(_mesh.get_dim()-vb),
     _elem_type(elem_type_in[mesh.get_dim()-vb -1]),
     _mesh_vb(vb),
-    _Level(level)
+    _Level(level),
+    _iel(iel_in),
+    _proc(iproc_in),
+    _mesh_new(mesh_new)
     {
     
 //========== Current "Geometric Element"  ========================
@@ -58,9 +61,6 @@ namespace femus {
   }
  
 
-  void  CurrentElem::SetMesh(const Mesh * mesh_in) { _mesh_new = mesh_in; return; }
-    
-    
     
 //Ok, in the new logic  the element and gauss points are going to be instantiations
 // of the assemble routine. therefore they will be filled using the this-> pointer,
@@ -92,9 +92,9 @@ for (uint ivar=0; ivar < _eqn->_dofmap._nvars[fe]; ivar++)    {
           const uint     indx  = d + ivar*_elem_type[fe]->GetNDofs() + off_local_el[fe];
 	  _el_dof_indices[indx] = _eqn->_dofmap.GetDof(_Level,fe,ivar,DofObj);
 
-         if (fe < KK ) { const uint dofkivar = _eqn->_dofmap.GetDof(Lev_pick_bc_dof,fe,ivar,DofObj); 
-             _bc_eldofs[indx] = _eqn->_bcond._bc[dofkivar]; }
-         else if (fe == KK)    _bc_eldofs[indx] = _eqn->_bcond._bc_fe_kk[_Level][ DofObj + ivar*_eqn->_dofmap._DofNumLevFE[_Level][KK] ];
+	   const uint dofkivar = _eqn->_dofmap.GetDof(Lev_pick_bc_dof,fe,ivar,DofObj); 
+             _bc_eldofs[indx] = _eqn->_bcond._bc[dofkivar]; 
+	   
 	 }
     } 
 } // end fe
@@ -227,14 +227,14 @@ void CurrentElem::PrintOrientation() const {
   }
 
    // =====================================================================================
-  void CurrentElem::SetDofobjConnCoords(const uint isubd_in,const uint iel) {
+  void CurrentElem::SetDofobjConnCoords() {
 
     const uint mydim = _mesh.get_dim();
     const uint el_nnodes   = _el_conn.size();
           
    for (uint n=0; n<el_nnodes; n++)    {
 
-     _el_conn[n] = _mesh._el_map[_mesh_vb][( iel + _mesh._off_el[_mesh_vb][_mesh._NoLevels*isubd_in + _Level] )*el_nnodes+n];
+     _el_conn[n] = _mesh._el_map[_mesh_vb][( _iel + _mesh._off_el[_mesh_vb][_mesh._NoLevels*_proc + _Level] )*el_nnodes+n];
 
       for (uint idim=0; idim < mydim; idim++) {
         const uint indxn = n+idim*el_nnodes;
@@ -244,8 +244,8 @@ void CurrentElem::PrintOrientation() const {
    
    
     int sum_elems_prev_sd_at_lev = 0;
-      for (uint pr = 0; pr< isubd_in; pr++) { sum_elems_prev_sd_at_lev += _mesh._off_el[_mesh_vb][_mesh._NoLevels*pr + _Level + 1] - _mesh._off_el[_mesh_vb][ _mesh._NoLevels*pr + _Level]; }
-    uint iel_DofObj = iel + sum_elems_prev_sd_at_lev;
+      for (uint pr = 0; pr< _proc; pr++) { sum_elems_prev_sd_at_lev += _mesh._off_el[_mesh_vb][_mesh._NoLevels*pr + _Level + 1] - _mesh._off_el[_mesh_vb][ _mesh._NoLevels*pr + _Level]; }
+    uint iel_DofObj = _iel + sum_elems_prev_sd_at_lev;
     if       (_mesh_vb == VV)  { _vol_iel_DofObj = iel_DofObj; }   
     else if  (_mesh_vb == BB)  { _vol_iel_DofObj = _mesh._el_bdry_to_vol[_Level][iel_DofObj]; }  
    
@@ -272,7 +272,7 @@ void CurrentElem::ConvertElemCoordsToMappingOrd(CurrentQuantity& myvect) const {
   const uint offset = _el_conn.size();
  
  //TODO ASSERT
- /* assert(*/ if (elndof > offset) {std::cout << "Quadratic transformation over linear mesh " << std::endl;abort();}  /*);*/
+ /* assert(*/ if (elndof > offset) { std::cout << "Quadratic transformation over linear mesh " << std::endl; abort(); }  /*);*/
   
   //information for passing from mesh to dofs
   
@@ -290,17 +290,17 @@ void CurrentElem::ConvertElemCoordsToMappingOrd(CurrentQuantity& myvect) const {
  }   
    
 //=================================
-//TODO deprecated
+/// @deprecated
 //This function is for NS type equations:
 //it computes the flags for pressure and stress integrals 
 //based on the pressure nodes
- int CurrentElem::Bc_ComputeElementBoundaryFlagsFromNodalFlagsForPressure(const CurrentQuantity & Velold_in,const CurrentQuantity& press_in) const {
+ int CurrentElem::Bc_ComputeElementBoundaryFlagsFromNodalFlagsForPressure(const uint ndof_in, const uint space_dim, const CurrentQuantity& press_in) const {
    
    int press_fl = 0;
    
 	const uint el_ndof_p =  press_in._ndof;
-	const uint el_ndof_u =  Velold_in._ndof;
-	const uint   nvars_u =  Velold_in._dim;
+	const uint el_ndof_u =  ndof_in;
+	const uint   nvars_u =  space_dim;
         int press_sum=0;
            for (uint i=0; i< el_ndof_p; i++)   press_sum += _bc_eldofs[nvars_u*el_ndof_u + i]; //only one linear variable... pay attention when trying linear-linear
             if ( press_sum ==0 )                 {  press_fl = 1; }   //ALL zeros: ONLY PRESSURE
@@ -310,27 +310,113 @@ void CurrentElem::ConvertElemCoordsToMappingOrd(CurrentQuantity& myvect) const {
   }
 
   
-// ========================================================
-//This function transforms the node coordinates into the reference node coordinates
-  void CurrentElem::TransformElemNodesToRef(Domain* mydom, double* refbox_xyz) {
-   
-   std::vector<double>   x_in(_dim);
-   std::vector<double>   x_out(_dim);
-  const uint el_nds = _xx_nds.size()/_mesh.get_dim();
+// // // // ========================================================
+// // // //This function transforms the node coordinates into the reference node coordinates
+// // //   void CurrentElem::TransformElemNodesToRef(Domain* mydom, double* refbox_xyz) {
+// // //    
+// // //    std::vector<double>   x_in(_dim);
+// // //    std::vector<double>   x_out(_dim);
+// // //   const uint el_nds = _xx_nds.size()/_mesh.get_dim();
+// // // 
+// // //       for ( uint n=0; n < el_nds; n++ ) {
+// // // 	
+// // //    for ( uint idim=0; idim < _dim; idim++ )  x_in[idim] = _xx_nds[n + idim*el_nds];
+// // //   
+// // //   mydom->TransformPointToRef(&x_in[0],&x_out[0]);
+// // // 
+// // //    for ( uint idim=0; idim < _dim; idim++ )  refbox_xyz[n + idim*el_nds] = x_out[idim];
+// // //    
+// // //       }
+// // //    
+// // //   return; 
+// // //  }
 
-      for ( uint n=0; n < el_nds; n++ ) {
-	
-   for ( uint idim=0; idim < _dim; idim++ )  x_in[idim] = _xx_nds[n + idim*el_nds];
+ 
+    // =====================================================================================
+//   void CurrentElem::SetDofobjConn_twoCoordsDof() {
+
+// for each scalar variable involved, you need to define
+  // dofsVAR    # of solutions
+  // indexVAR   # of solutions
   
-  mydom->TransformPointToRef(&x_in[0],&x_out[0]);
+  //indVAR   # of rows
+  //SolType  # of columns
+  
+  //Now the thing is: we can have EQUATION BLOCKS that are NOT ASSOCIATED with any SOLUTION
+  //So, not only you can have a solution without equation, you can also have an equation without solution
 
-   for ( uint idim=0; idim < _dim; idim++ )  refbox_xyz[n + idim*el_nds] = x_out[idim];
-   
-      }
-   
-  return; 
- }
+  //What is the difference between GetIndex and GetSolPdeIndex ??
+  //  AX AY AZ are solutions or not? Wait... they only appear in the switch for SetBoundaryConditionComsol...
+  
+//       unsigned nel    = mymsh->GetNumberOfElements();
 
+//          elem * myel = _mesh_new->el;
+//         unsigned kel    = _mesh_new->IS_Mts2Gmt_elem[_iel]; 
+//     short unsigned kelt = myel->GetElementType(kel);
+
+
+//   unsigned order_ind = ml_sol->GetSolutionType(ml_sol->GetIndex("U")); 
+//     unsigned nve        = myel->GetElementDofNumber(kel,order_ind);
+//     
+// 
+// 
+//     _el_conn_new.resize(nve);
+//     
+//     for (unsigned i=0;i<nve;i++) {
+//       // gambit nodes
+//            unsigned inode=(order_ind<3)?(myel->GetElementVertexIndex(kel,i)-1u):(kel+i*nel);
+//       unsigned inode=myel->GetElementVertexIndex(kel,i)-1u;
+
+//       // dof metis
+//       /*metis_node2*/_el_conn_new[i] = mymsh->GetMetisDof(inode,BIQUADR_FE);
+//                       metis_node1[i] = mymsh->GetMetisDof(inode,SolType[2*dim]);
+
+
+//  	dofsVAR[j+dim][i]= mylsyspde->GetKKDof(indVAR[j+dim],indexVAR[j+dim],inode);   
+
+//     }
+//     
+//     
+//     
+//     return;
+//   }   
+
+ 
+    // =====================================================================================
+//   void CurrentElem::SetCoords_two() {
+// 
+//      for (unsigned i=0;i<nve;i++) {
+//       gambit nodes
+//       unsigned inode=myel->GetElementVertexIndex(kel,i)-1u;
+//       dof metis
+//       unsigned inode_Metis=mymsh->GetMetisDof(inode,2);
+//       metis_node2[i]=inode_Metis;
+//       
+//       unsigned inode_Metis=mymsh->GetMetisDof(inode,2);
+//       flag to know if the node "inode" lays on the fluid-solid interface
+//       solidmark[i]=myel->GetNodeRegion(inode); // to check
+//       for(int j=0; j<dim; j++) {
+// 	Updated coordinates (Moving frame)
+//         vx[j][i]= (*mymsh->_coordinate->_Sol[j])(inode_Metis) + (*mysolution->_Sol[indVAR[j]])(inode_Metis);
+// 	Old coordinates (Moving frame)
+//         vx_old[j][i]= (*mymsh->_coordinate->_Sol[j])(inode_Metis) + (*mysolution->_SolOld[indVAR[j]])(inode_Metis);
+// 	Fixed coordinates (Reference frame)
+// 	vx_hat[j][i]= (*mymsh->_coordinate->_Sol[j])(inode_Metis);  
+// 	displacement dofs
+// 	dofsVAR[j][i]= mylsyspde->GetKKDof(indVAR[j],indexVAR[j],inode); 
+// 	velocity dofs
+// 	dofsVAR[j+dim][i]= mylsyspde->GetKKDof(indVAR[j+dim],indexVAR[j+dim],inode);   
+//       }
+//     }
+//  
+//     
+//     
+//     
+//     return;
+//   }   
+
+
+ 
 } //end namespace femus
 
 

@@ -19,7 +19,6 @@
 #include "TimeLoop.hpp"
 #include "Typedefs.hpp"
 #include "Quantity.hpp"
-#include "QTYnumEnum.hpp"
 #include "Box.hpp"  //for the DOMAIN
 #include "LinearEquationSolver.hpp"
 #include "XDMFWriter.hpp"
@@ -31,7 +30,7 @@
 #include "libmesh/libmesh.h"
 #endif 
 
- void GenMatRhsT(MultiLevelProblem &ml_prob, unsigned Level, const unsigned &gridn, const bool &assemble_matrix);
+ void GenMatRhsT(MultiLevelProblem &ml_prob);
 
 
 // =======================================

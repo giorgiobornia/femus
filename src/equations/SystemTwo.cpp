@@ -29,7 +29,6 @@
 
 #include "MgSmootherEnum.hpp"
 #include "NormTangEnum.hpp"
-#include "QTYnumEnum.hpp"
 #include "XDMFWriter.hpp"
 #include "MultiLevelMeshTwo.hpp"
 #include "MultiLevelProblem.hpp"
@@ -54,7 +53,7 @@ namespace femus {
 SystemTwo::SystemTwo(MultiLevelProblem& e_map_in, const std::string & eqname_in, const unsigned int number, const MgSmoother & smoother_type):
         _dofmap(this,e_map_in.GetMeshTwo()),
         _bcond(&_dofmap),
-        LinearImplicitSystem(e_map_in,eqname_in,number,smoother_type) { }
+        NonLinearImplicitSystem(e_map_in,eqname_in,number,smoother_type) { }
 
 
 void SystemTwo::init_unknown_vars() {
@@ -229,18 +228,19 @@ void SystemTwo::Initialize() {
 
     for (uint Level = 0; Level< GetGridn(); Level++) {
       
-  Mesh		*mymsh		=  GetMLProb()._ml_msh->GetLevel(Level);
-       CurrentElem       currelem(Level,VV,this,GetMLProb().GetMeshTwo(),GetMLProb().GetElemType());  
-       currelem.SetMesh(mymsh);
-        const uint  el_dof_objs = NVE[ GetMLProb().GetMeshTwo()._geomelem_flag[currelem.GetDim()-1] ][BIQUADR_FE];
+            Mesh	*mymsh	=  GetMLProb()._ml_msh->GetLevel(Level);
+            const unsigned myproc  = mymsh->processor_id();
 
             uint iel_b = GetMLProb().GetMeshTwo()._off_el[VV][ GetMLProb().GetMeshTwo()._iproc*GetGridn() + Level ];
             uint iel_e = GetMLProb().GetMeshTwo()._off_el[VV][ GetMLProb().GetMeshTwo()._iproc*GetGridn() + Level + 1];
 
 	    for (uint iel=0; iel < (iel_e - iel_b); iel++) {
 	  
-	        currelem.SetDofobjConnCoords(GetMLProb().GetMeshTwo()._iproc,iel);
-                currelem.SetMidpoint();
+                CurrentElem       currelem(iel,myproc,Level,VV,this,GetMLProb().GetMeshTwo(),GetMLProb().GetElemType(),mymsh);  
+	
+	        currelem.SetDofobjConnCoords();
+		
+                const uint  el_dof_objs = NVE[ GetMLProb().GetMeshTwo()._geomelem_flag[currelem.GetDim()-1] ][BIQUADR_FE];
 
             for (uint q=0; q < _UnknownQuantitiesVector.size() ; q++) {
 		      
@@ -249,7 +249,6 @@ void SystemTwo::Initialize() {
 	    //for each family we should only pick the dof objects that are needed
 	    //what changes between the FE families is the DOF OBJECT YOU PROVIDE: it could be a NODE or a CELL
 	    // Notice that for some elements you don't have the midpoint of the element!
-     if (_UnknownQuantitiesVector[q]->_FEord < KK) {
        
         for (uint ivar=0; ivar < _UnknownQuantitiesVector[q]->_dim; ivar++) {
        
@@ -265,29 +264,6 @@ void SystemTwo::Initialize() {
 	    }  //dof objects 
          }
 
-     }
-     else if (_UnknownQuantitiesVector[q]->_FEord == KK) { 
-
-	    for (uint ivar=0; ivar < _UnknownQuantitiesVector[q]->_dim; ivar++) {
-	    
-                for (uint k=0; k < currelem.GetElemType(_UnknownQuantitiesVector[q]->_FEord)->GetNDofs() ; k++) { //only 1
-		  
-       int sum_elems_prev_sd_at_lev = 0;
-	  for (uint pr = 0; pr < GetMLProb().GetMeshTwo()._iproc; pr++) { sum_elems_prev_sd_at_lev += GetMLProb().GetMeshTwo()._off_el[VV][pr*GetGridn() + Level + 1] - GetMLProb().GetMeshTwo()._off_el[VV][pr*GetGridn() + Level]; }
-	  
-          currelem.GetMidpoint();
-	  
-	  _UnknownQuantitiesVector[q]->initialize_xyz(&currelem.GetMidpoint()[0],value);
-
-	      const int elem_lev = iel + sum_elems_prev_sd_at_lev;
-	      const int dof_pos_lev = _dofmap.GetDofQuantityComponent(Level,_UnknownQuantitiesVector[q],ivar,elem_lev);
-              _LinSolver[Level]->_EPS->set( dof_pos_lev, value[ivar] );
-	    
- 	                       }  //k
-	                  } //ivar
-       
-                     }     //end KK
-	    
               } //qty
         
         

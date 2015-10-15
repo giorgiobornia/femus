@@ -89,26 +89,39 @@ double ComputeIntegral (const uint Level, const MultiLevelMeshTwo* mesh, const S
  
   const uint mesh_vb = VV;
 
-    CurrentElem       currelem(Level,VV,eqn,*mesh,eqn->GetMLProb().GetElemType());
-    currelem.SetMesh(mymsh);
+  
+   double integral = 0.;
+
+
+//parallel sum
+    const uint nel_e = mesh->_off_el[mesh_vb][mesh->_NoLevels*myproc+Level+1];
+    const uint nel_b = mesh->_off_el[mesh_vb][mesh->_NoLevels*myproc+Level];
+  
+    for (uint iel=0; iel < (nel_e - nel_b); iel++) {
+      
+    CurrentElem       currelem(iel,myproc,Level,VV,eqn,*mesh,eqn->GetMLProb().GetElemType(),mymsh);
     CurrentGaussPointBase & currgp = CurrentGaussPointBase::build(currelem,eqn->GetMLProb().GetQrule(currelem.GetDim()));
 
   //========== 
     CurrentQuantity Tempold(currgp);
+    Tempold._SolName = "Qty_Temperature";
     Tempold._qtyptr   =  eqn->GetMLProb().GetQtyMap().GetQuantity("Qty_Temperature"); 
     Tempold.VectWithQtyFillBasic();
     Tempold.Allocate();
 
   //========== 
     CurrentQuantity Tlift(currgp);
+    Tlift._SolName = "Qty_TempLift";
     Tlift._qtyptr   =  eqn->GetMLProb().GetQtyMap().GetQuantity("Qty_TempLift"); 
     Tlift.VectWithQtyFillBasic();
     Tlift.Allocate();
     
  //===========
     CurrentQuantity Tdes(currgp);
-    Tdes._qtyptr   = eqn->GetMLProb().GetQtyMap().GetQuantity("Qty_TempDes"); 
-    Tdes.VectWithQtyFillBasic();
+    Tdes._SolName = "Qty_TempDes";
+    Tdes._dim      = Tempold._dim;
+    Tdes._FEord    = Tempold._FEord;
+    Tdes._ndof     = Tempold._ndof;
     Tdes.Allocate();
   
 //========= DOMAIN MAPPING
@@ -118,52 +131,30 @@ double ComputeIntegral (const uint Level, const MultiLevelMeshTwo* mesh, const S
     xyz._ndof     = currelem.GetElemType(xyz._FEord)->GetNDofs();
     xyz.Allocate();
 
-//========== Quadratic domain, auxiliary  
-  CurrentQuantity xyz_refbox(currgp);
-  xyz_refbox._dim      = space_dim;
-  xyz_refbox._FEord    = MESH_ORDER;
-  xyz_refbox._ndof     = mymsh->el->GetElementDofNumber(ZERO_ELEM,BIQUADR_FE);
-  xyz_refbox.Allocate();
-
-  
-   double integral = 0.;
-
-      const uint el_ngauss = eqn->GetMLProb().GetQrule(currelem.GetDim()).GetGaussPointsNumber();
-
-//parallel sum
-    const uint nel_e = mesh->_off_el[mesh_vb][mesh->_NoLevels*myproc+Level+1];
-    const uint nel_b = mesh->_off_el[mesh_vb][mesh->_NoLevels*myproc+Level];
-  
-    for (uint iel=0; iel < (nel_e - nel_b); iel++) {
-
-      currelem.SetDofobjConnCoords(myproc,iel);
-      currelem.SetMidpoint();
+      currelem.SetDofobjConnCoords();
       
      currelem.ConvertElemCoordsToMappingOrd(xyz);
-     currelem.TransformElemNodesToRef(eqn->GetMLProb().GetMeshTwo().GetDomain(),&xyz_refbox._val_dofs[0]);    
-
 // =============== 
-      xyz_refbox.SetElemAverage();
-      int el_flagdom = ElFlagControl(xyz_refbox._el_average,eqn->GetMLProb()._ml_msh);
+     xyz.SetElemAverage();
+     int el_flagdom = ElFlagControl(xyz._el_average,eqn->GetMLProb()._ml_msh);
 //====================     
  
-    if ( Tempold._eqnptr != NULL )   Tempold.GetElemDofs();
-    else                             Tempold._qtyptr->FunctionDof(Tempold,0.,&xyz_refbox._val_dofs[0]);
-    if ( Tlift._eqnptr != NULL )       Tlift.GetElemDofs();
-    else                               Tlift._qtyptr->FunctionDof(Tlift,0.,&xyz_refbox._val_dofs[0]);
-    if ( Tdes._eqnptr != NULL )         Tdes.GetElemDofs();
-    else                                Tdes._qtyptr->FunctionDof(Tdes,0.,&xyz_refbox._val_dofs[0]);    
+    Tempold.GetElemDofs();
+    Tlift.GetElemDofs();
+    
+    TempDesired(Tdes,currelem);
 
-
+    const uint el_ngauss = eqn->GetMLProb().GetQrule(currelem.GetDim()).GetGaussPointsNumber();
 
     for (uint qp = 0; qp < el_ngauss; qp++) {
 
-     for (uint fe = 0; fe < QL; fe++)     {  currgp.SetDPhiDxezetaElDofsFEVB_g (fe,qp);  }  
+     for (uint fe = 0; fe < QL; fe++)     {  
+       currgp.SetPhiElDofsFEVB_g (fe,qp);
+       currgp.SetDPhiDxezetaElDofsFEVB_g (fe,qp);  
+    }  
      
-   const double  Jac_g = currgp.JacVectVV_g(xyz);  //not xyz_refbox!      
+   const double  Jac_g = currgp.JacVectVV_g(xyz);      
    const double  wgt_g = eqn->GetMLProb().GetQrule(currelem.GetDim()).GetGaussWeight(qp);
-
-     for (uint fe = 0; fe < QL; fe++)     {          currgp.SetPhiElDofsFEVB_g (fe,qp);  }
 
  Tempold.val_g();
    Tlift.val_g();
@@ -228,8 +219,18 @@ double ComputeNormControl (const uint Level, const MultiLevelMeshTwo* mesh, cons
   
   Mesh		*mymsh		=  eqn->GetMLProb()._ml_msh->GetLevel(Level);
   
-    CurrentElem       currelem(Level,VV,eqn,*mesh,eqn->GetMLProb().GetElemType());
-    currelem.SetMesh(mymsh);
+
+    
+   double integral = 0.;
+
+
+//parallel sum
+    const uint nel_e = mesh->_off_el[mesh_vb][mesh->_NoLevels*myproc+Level+1];
+    const uint nel_b = mesh->_off_el[mesh_vb][mesh->_NoLevels*myproc+Level];
+  
+    for (int iel=0; iel < (nel_e - nel_b); iel++) {
+      
+    CurrentElem       currelem(iel,myproc,Level,VV,eqn,*mesh,eqn->GetMLProb().GetElemType(),mymsh);
     CurrentGaussPointBase & currgp = CurrentGaussPointBase::build(currelem,eqn->GetMLProb().GetQrule(currelem.GetDim()));
   
 //======Functions in the integrand ============
@@ -237,6 +238,7 @@ double ComputeNormControl (const uint Level, const MultiLevelMeshTwo* mesh, cons
       //========== 
     CurrentQuantity Tlift(currgp);
     Tlift._qtyptr   =  eqn->GetMLProb().GetQtyMap().GetQuantity("Qty_TempLift"); 
+    Tlift._SolName = "Qty_TempLift";
     Tlift.VectWithQtyFillBasic();
     Tlift.Allocate();
 
@@ -247,33 +249,14 @@ double ComputeNormControl (const uint Level, const MultiLevelMeshTwo* mesh, cons
     xyz._ndof     = currelem.GetElemType(xyz._FEord)->GetNDofs();
     xyz.Allocate();
 
-//========== Quadratic domain, auxiliary  
-  CurrentQuantity xyz_refbox(currgp);
-  xyz_refbox._dim      = space_dim;
-  xyz_refbox._FEord    = MESH_ORDER;
-  xyz_refbox._ndof     = mymsh->el->GetElementDofNumber(ZERO_ELEM,BIQUADR_FE);
-  xyz_refbox.Allocate();
   
-    
-   double integral = 0.;
-
-//loop over the geom el types
-      const uint el_ngauss = eqn->GetMLProb().GetQrule(currelem.GetDim()).GetGaussPointsNumber();
-
-//parallel sum
-    const uint nel_e = mesh->_off_el[mesh_vb][mesh->_NoLevels*myproc+Level+1];
-    const uint nel_b = mesh->_off_el[mesh_vb][mesh->_NoLevels*myproc+Level];
-  
-    for (int iel=0; iel < (nel_e - nel_b); iel++) {
-
-      currelem.SetDofobjConnCoords(myproc,iel);
-      currelem.SetMidpoint();
+      currelem.SetDofobjConnCoords();
 
       currelem.ConvertElemCoordsToMappingOrd(xyz);
-      currelem.TransformElemNodesToRef(eqn->GetMLProb().GetMeshTwo().GetDomain(),&xyz_refbox._val_dofs[0]);    
      
      Tlift.GetElemDofs();
 
+     const uint el_ngauss = eqn->GetMLProb().GetQrule(currelem.GetDim()).GetGaussPointsNumber();      
 
   for (uint qp = 0; qp < el_ngauss; qp++) {
 
@@ -282,7 +265,7 @@ double ComputeNormControl (const uint Level, const MultiLevelMeshTwo* mesh, cons
        currgp.SetDPhiDxezetaElDofsFEVB_g (fe,qp);  
     }  
      
-      const double  Jac_g = currgp.JacVectVV_g(xyz);  //not xyz_refbox!      
+      const double  Jac_g = currgp.JacVectVV_g(xyz);      
       const double  wgt_g = eqn->GetMLProb().GetQrule(currelem.GetDim()).GetGaussWeight(qp);
 
   Tlift.val_g();
@@ -372,7 +355,339 @@ double ComputeNormControl (const uint Level, const MultiLevelMeshTwo* mesh, cons
 return el_flagdom; 
 
 }
+
+
+ void TempDesired(CurrentQuantity& myvect, const CurrentElem & currelem)  {
+   
+   for (uint ivar=0; ivar < myvect._dim; ivar++) 
+       for (uint d=0; d < myvect._ndof; d++)      myvect._val_dofs[d+ivar*myvect._ndof] =  0.9;
  
+     
+  return;
+  
+ }
+
+
+
+
+
+//---------------------------------------------------------------------------------------------------------------------
+
+bool SetBoundaryCondition(const MultiLevelProblem * ml_prob, const double &x, const double &y, const double &z,const char name[], double &value, const int facename, const double time) {
+
+  std::vector<double> xp(ml_prob->_ml_msh->GetDimension());
+  xp[0] = x;
+  xp[1] = y;
+
+  if ( ml_prob->_ml_msh->GetDimension() == 3 )    xp[2] = z;
+
+  // defaults ***********
+  bool test=1; //dirichlet  // 0 neumann
+  value=0.;
+  // defaults ***********
+  
+  const double bdry_toll = DEFAULT_BDRY_TOLL;
+  
+  Box* box = static_cast<Box*>(ml_prob->_ml_msh->GetDomain());
+
+  std::vector<double> lb(ml_prob->_ml_msh->GetDimension());
+  std::vector<double> le(ml_prob->_ml_msh->GetDimension());
+  lb[0] = box->_lb[0]; //already nondimensionalized
+  le[0] = box->_le[0];
+  lb[1] = box->_lb[1];
+  le[1] = box->_le[1];
+  if (ml_prob->_ml_msh->GetDimension() == 3) {
+  lb[2] = box->_lb[2];
+  le[2] = box->_le[2];
+  }
+  
+    std::vector<double> x_rotshift(ml_prob->_ml_msh->GetDimension());
+  ml_prob->_ml_msh->GetDomain()->TransformPointToRef(&xp[0],&x_rotshift[0]);
+
+  
+  if(!strcmp(name,"Qty_Temperature")) {
+ 
+  if ( (x_rotshift[0]) > -bdry_toll && ( x_rotshift[0]) < bdry_toll )       test=1; 
+  if ( (le[0]-lb[0])  - (x_rotshift[0]) > -bdry_toll && (le[0]-lb[0])  -(x_rotshift[0]) < bdry_toll)        test=1; 
+  if (( x_rotshift[1]) > -bdry_toll && ( x_rotshift[1]) < bdry_toll)                               test=1; 
+  if ((le[1]-lb[1]) -(x_rotshift[1]) > -bdry_toll &&  (le[1]-lb[1]) -(x_rotshift[1]) < bdry_toll)           test=1; 
+   
+  value = 0.;
+  
+  }
+  
+  
+  else if(!strcmp(name,"Qty_TempLift")){
+    
+     value=1.;
+     
+  if ( (x_rotshift[0]) > -bdry_toll && ( x_rotshift[0]) < bdry_toll ) {  //left of the RefBox
+       test=1; 
+      value=1.;
+  }
+
+ if ( (le[0]-lb[0])  - (x_rotshift[0]) > -bdry_toll && (le[0]-lb[0])  -(x_rotshift[0]) < bdry_toll)  { //right of the RefBox
+       test=1; 
+      value=1.;
+   }
+
+  
+   if (( x_rotshift[1]) > -bdry_toll && ( x_rotshift[1]) < bdry_toll)  { //bottom  of the RefBox
+
+       if  ( (x_rotshift[0]) < 0.25*(le[0] - lb[0]) || ( x_rotshift[0]) > 0.75*(le[0] - lb[0]) )  {
+       test=1; 
+      value=1.; 
+	 
+      }
+       else {
+       test=0; /// @todo what is the meaning of value for the Neumann case?
+      }
+       
+     }
+  
+  if ((le[1]-lb[1]) -(x_rotshift[1]) > -bdry_toll &&  (le[1]-lb[1]) -(x_rotshift[1]) < bdry_toll)  {  //top of the RefBox
+       test=1; 
+      value=0.; 
+    }
+
+ 
+  }
+  
+  else if(!strcmp(name,"Qty_TempAdj")) {
+    
+    
+  if ( (x_rotshift[0]) > -bdry_toll && ( x_rotshift[0]) < bdry_toll )                                     test = 1; 
+  if ( (le[0]-lb[0])  - (x_rotshift[0]) > -bdry_toll && (le[0]-lb[0])  -(x_rotshift[0]) < bdry_toll)      test = 1; 
+  if (( x_rotshift[1]) > -bdry_toll && ( x_rotshift[1]) < bdry_toll)                                      test = 1; 
+  if ((le[1]-lb[1]) -(x_rotshift[1]) > -bdry_toll &&  (le[1]-lb[1]) -(x_rotshift[1]) < bdry_toll)         test = 1; 
+  
+    value=0.; 
+  
+  }
+  
+  
+  else if(!strcmp(name,"Qty_Velocity0")){
+ 
+  if ( (x_rotshift[0]) > -bdry_toll && ( x_rotshift[0]) < bdry_toll ) {//left of the RefBox
+       test=1; 
+      value=0.;
+      
+       if ( (x_rotshift[1]) > 0.4*(le[1] - lb[1]) && ( x_rotshift[1]) < 0.6*(le[1]-lb[1]) )  {
+       value = ml_prob->GetInputParser().get("injsuc");    
+      }
+      
+      
+  }
+
+ if ( (le[0]-lb[0]) - (x_rotshift[0]) > -bdry_toll && (le[0]-lb[0])  -(x_rotshift[0]) < bdry_toll  ){ //right of the RefBox
+       test=1; 
+      value=0.; 
+  }
+  
+   if (( x_rotshift[1]) > -bdry_toll && ( x_rotshift[1]) < bdry_toll)  { //bottom  of the RefBox
+       test=1; 
+      value=0.; 
+  }
+  
+  if ((le[1]-lb[1]) -(x_rotshift[1]) > -bdry_toll &&  (le[1]-lb[1]) -(x_rotshift[1]) < bdry_toll)  {  //top of the  of the RefBox
+       test=1; 
+      value=0.; 
+  } //top RefBox     
+    
+  }
+  
+  else if(!strcmp(name,"Qty_Velocity1")){
+    
+    
+    
+      if ( (x_rotshift[0]) > -bdry_toll && ( x_rotshift[0]) < bdry_toll ) {//left of the RefBox
+       test=1; 
+      value=0.; 
+  }
+
+ if ( (le[0]-lb[0]) - (x_rotshift[0]) > -bdry_toll && (le[0]-lb[0])  -(x_rotshift[0]) < bdry_toll  ){ //right of the RefBox
+       test=1; 
+      value=0.; 
+  }
+  
+ if (( x_rotshift[1]) > -bdry_toll && ( x_rotshift[1]) < bdry_toll)  { //bottom  of the RefBox
+        test=1; 
+      
+      //below, inlet
+ if ( (x_rotshift[0]) < 0.25*(le[0] - lb[0]) || ( x_rotshift[0]) > 0.75*(le[0] - lb[0]) ) { 
+    value = 0.;
+  }
+  else {
+    value = 1.; 
+    }
+      
+  }
+  
+  if ((le[1]-lb[1]) -(x_rotshift[1]) > -bdry_toll &&  (le[1]-lb[1]) -(x_rotshift[1]) < bdry_toll)  {  //top of the RefBox
+
+//outflow only on part of the outlet
+  if ( (x_rotshift[0]) > 0.70*(le[0]-lb[0]) ) {
+        test=0;
+ }  //end part outflow
+    else {  
+       test=1; 
+      value=0.;
+    }
+  
+  } //top RefBox
+    
+ 
+    
+ 
+  }
+  
+  else if(!strcmp(name,"Qty_Pressure")) {
+    
+    
+     value =  1./ ml_prob->GetInputParser().get("pref")*( (le[1] - lb[1]) - xp[1] );
+
+    
+    
+    
+      if ( (x_rotshift[0]) > -bdry_toll && ( x_rotshift[0]) < bdry_toll ) {//left of the RefBox
+        test=0;
+  }
+
+ if ( (le[0]-lb[0]) - (x_rotshift[0]) > -bdry_toll && (le[0]-lb[0])  -(x_rotshift[0]) < bdry_toll  ){ //right of the RefBox
+        test=0;
+  }
+  
+   if (( x_rotshift[1]) > -bdry_toll && ( x_rotshift[1]) < bdry_toll)  { //bottom  of the RefBox
+        test=0;
+  }
+  
+  if ((le[1]-lb[1]) -(x_rotshift[1]) > -bdry_toll &&  (le[1]-lb[1]) -(x_rotshift[1]) < bdry_toll)  {  //top of the  of the RefBox
+
+//outflow only on part of the outlet
+  if ( (x_rotshift[0]) > 0.70*(le[0]-lb[0]) ) {
+        test=1;   /// @todo this does not mean that there is a DIRICHLET condition on PRESSURE... it means DO THE INTEGRAL
+ }  //end part outflow
+    else {  
+        test=0;
+    }
+  
+  } //top RefBox
+
+     
+  }
+  
+  return test;
+}
+
+
+//---------------------------------------------------------------------------------------------------------------------
+
+double SetInitialCondition(const MultiLevelProblem * ml_prob, const double &x, const double &y, const double &z, const char * name) {
+
+  std::vector<double> xp(ml_prob->_ml_msh->GetDimension());
+  xp[0] = x;
+  xp[1] = y;
+
+  if ( ml_prob->_ml_msh->GetDimension() == 3 )    xp[2] = z;
+
+  // defaults ***********
+  double value = 0.;
+  // defaults ***********
+  
+  const double bdry_toll = DEFAULT_BDRY_TOLL;
+  
+  Box* box = static_cast<Box*>(ml_prob->_ml_msh->GetDomain());
+
+  std::vector<double> lb(ml_prob->_ml_msh->GetDimension());
+  std::vector<double> le(ml_prob->_ml_msh->GetDimension());
+  lb[0] = box->_lb[0]; //already nondimensionalized
+  le[0] = box->_le[0];
+  lb[1] = box->_lb[1];
+  le[1] = box->_le[1];
+  if (ml_prob->_ml_msh->GetDimension() == 3) {
+  lb[2] = box->_lb[2];
+  le[2] = box->_le[2];
+  }
+  
+    std::vector<double> x_rotshift(ml_prob->_ml_msh->GetDimension());
+  ml_prob->_ml_msh->GetDomain()->TransformPointToRef(&xp[0],&x_rotshift[0]);
+
+  
+  if(!strcmp(name,"Qty_Temperature")) {
+ 
+    value = 0.; 
+  }
+  
+  
+  else if(!strcmp(name,"Qty_TempLift")){
+    
+    value = 1.;
+    
+      if ((le[1]-lb[1]) -(x_rotshift[1]) > -bdry_toll &&  (le[1]-lb[1]) -(x_rotshift[1]) < bdry_toll)  {
+    value = 0.; 
+  }
+ 
+  }
+  
+  
+  
+  else if(!strcmp(name,"Qty_TempAdj")){
+    
+      value = 0.; 
+
+  }
+  
+  
+  else if(!strcmp(name,"Qty_Velocity0")){
+ 
+      value = 0.; 
+
+     if  ( (x_rotshift[0]) > -bdry_toll && ( x_rotshift[0]) < bdry_toll ) {
+ 
+ if ( (x_rotshift[1]) > 0.4*(le[1] - lb[1]) && ( x_rotshift[1]) < 0.6*(le[1]-lb[1]) )  {  //left of the refbox
+       value = ml_prob->GetInputParser().get("injsuc");    
+      }
+   }
+   
+  }
+  
+  else if(!strcmp(name,"Qty_Velocity1")){
+    
+     //==================================
+    if (( x_rotshift[1]) > -bdry_toll && ( x_rotshift[1]) < bdry_toll)  { //bottom  of the RefBox
+
+//below, inlet
+  if ( (x_rotshift[0]) < 0.25*(le[0] - lb[0]) || ( x_rotshift[0]) > 0.75*(le[0] - lb[0]) ) { 
+    value = 0.;
+  }
+  else {
+    value = 1.; 
+    }
+  
+  }
+    
+ 
+  }
+  
+  else if(!strcmp(name,"Qty_Pressure")) {
+    
+    
+  value =  1./ ml_prob->GetInputParser().get("pref")*( (le[1] - lb[1]) - xp[1] );
+
+     
+  }
+
+  else if(!strcmp(name,"Qty_TempDes")) {
+    
+    
+  value =  0.9;
+
+     
+  }  
+  
+  return value;
+}
+
 
 
 } //end namespace femus

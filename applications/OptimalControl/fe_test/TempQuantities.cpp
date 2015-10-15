@@ -27,40 +27,8 @@ Temperature::Temperature(std::string name_in, QuantityMap& qtymap_in, uint dim_i
 // ==================================================================
 
 
-// =================================================
-void Temperature::Function_txyz(const double/* t*/, const double* xp,double* temp) const {
 
-  const double Tref = _qtymap.GetInputParser()->get("Tref");
-
-  Box* box = static_cast<Box*>(_qtymap.GetMeshTwo()->GetDomain());  
   
-  temp[0] = 100.*(xp[0])*( ( box->_le[0] - box->_lb[0]) - xp[0])/Tref;
- 
-  
-  return;
-  }
-  
-  
-// =================================================
-  //the coordinates (x,y,z,t) of the VOLUME domain are NON-dimensional
-  //and the function value must be nondimensional as well
- //-----Nonhomogeneous Neumann-------
- // Qflux = - k grad(T) by definition
-//  QfluxDOTn>0: energy flows outside (cooling)  QfluxDOTn<0: energy flows inside (heating)
-void Temperature::heatflux_txyz(const double /*t*/, const double* /*xyz*/, double* qflux) const {
-
-// std::cout << "Temperature: Heatflux, check which coordinates are passed in here" << std::endl;
-//     Box* box= static_cast<Box*>(_qtymap._phys._mesh->GetDomain());
-//   const double thetaz = box->_domain_rtmap.get("thetaz");
-
-     qflux[0]=-2.1*0./**cos(thetaz)*/;
-     qflux[1]=0./**sin(thetaz)*/;
-
-  return;
-  }
-  
- 
- 
  
   void Temperature::bc_flag_txyz(const double t, const double* xp, std::vector<int> & bc_flag) const  {
 // T' and its adjoint must be Dirichlet homogeneous everywhere on the boundary, by definition.

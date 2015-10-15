@@ -16,6 +16,8 @@
 #include "System.hpp"
 #include "MultiLevelMeshTwo.hpp"
 
+#include <sstream>
+
 namespace femus {
 
 
@@ -25,8 +27,8 @@ namespace femus {
   _equation_systems                 (ml_probl),
   _sys_name                         (name_in),
   _sys_number                       (number_in),
-  _gridn(ml_probl.GetNumberOfGrid()), 
-  _gridr(ml_probl.GetNumberOfGridTotallyRefined()),
+  _gridn(ml_probl.GetNumberOfLevels()), 
+  _gridr(ml_probl.GetNumberOfUniformlyRefinedLevels()),
   _ml_sol(ml_probl._ml_sol),
   _ml_msh(ml_probl._ml_msh)
 { 
@@ -55,15 +57,23 @@ void System::init() {
   return _assemble_system_function;
 }
 
-void System::SetAssembleFunction(void fptr(MultiLevelProblem &ml_prob, unsigned level, 
-				      const unsigned &gridn, const bool &assemble_matrix))
+void System::SetAssembleFunction(void fptr(MultiLevelProblem &ml_prob))
 {
   assert(fptr);
 
   _assemble_system_function = fptr;
 }
   
+void System::AddSolutionToSystemPDEVector(const unsigned n_components, const std::string name) {
 
+    for (unsigned i=0; i<n_components; i++) {
+      std::ostringstream name_cmp; name_cmp << name << i;
+       AddSolutionToSystemPDE(name_cmp.str().c_str());
+     }
+     
+}
+  
+  
 void System::AddSolutionToSystemPDE(const char solname[]){
   unsigned jsol=0;
   for(unsigned j=0;j<_SolSystemPdeIndex.size();j++){
