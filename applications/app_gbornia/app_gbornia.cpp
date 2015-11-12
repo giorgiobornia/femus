@@ -40,9 +40,12 @@ void AssemblePoissonProblem(MultiLevelProblem& ml_prob);
 
 int main(int argc, char** args) {
 
-  // init Petsc-MPI communicator
+ //************* INITIALIZATION BEGIN **************************************************************************  
+ // init Petsc-MPI communicator
   FemusInit mpinit(argc, args, MPI_COMM_WORLD);
+ //************* INITIALIZATION END **************************************************************************  
 
+//************* MESH BEGIN **************************************************************************  
   // define multilevel mesh
   MultiLevelMesh mlMsh;
   double scalingFactor = 1.;
@@ -54,7 +57,9 @@ int main(int argc, char** args) {
   unsigned numberOfSelectiveLevels = 0;
   mlMsh.RefineMesh(numberOfUniformLevels , numberOfUniformLevels + numberOfSelectiveLevels, NULL);
   mlMsh.PrintInfo();
+//************* MESH END **************************************************************************  
 
+//************* SOLUTION BEGIN **************************************************************************  
   // define the multilevel solution and attach the mlMsh object to it
   MultiLevelSolution mlSol(&mlMsh);
 
@@ -65,16 +70,18 @@ int main(int argc, char** args) {
 
        // attach the boundary condition function and generate boundary data
       mlSol.AttachSetBoundaryConditionFunction(SetBoundaryCondition);
-      mlSol.GenerateBdc("u");
+      mlSol.GenerateBdc("U");
+//************* SOLUTION END **************************************************************************  
 
+//************* PROBLEM BEGIN **************************************************************************  
       // define the multilevel problem attach the mlSol object to it
       MultiLevelProblem mlProb(&mlSol);
 
       // add system Poisson in mlProb as a Linear Implicit System
       LinearImplicitSystem& system = mlProb.add_system < LinearImplicitSystem > ("Poisson");
 
-      // add solution "u" to system
-      system.AddSolutionToSystemPDE("u");
+      // add solution "U" to system
+      system.AddSolutionToSystemPDE("U");
 
       // attach the assembling function to system
       system.SetAssembleFunction(AssemblePoissonProblem);
@@ -82,15 +89,10 @@ int main(int argc, char** args) {
       // initilaize and solve the system
       system.init();
       system.solve();
-
+//************* PROBLEM END **************************************************************************  
+ 
   
-  
-  
-  
-  
-  
-  
-  
+//************* PRINT BEGIN **************************************************************************  
   // print solutions
   std::vector < std::string > variablesToBePrinted;
   variablesToBePrinted.push_back("U");
@@ -102,6 +104,7 @@ int main(int argc, char** args) {
   variablesToBePrinted.push_back("all");
   gmvIO.SetDebugOutput(false);
   gmvIO.write(DEFAULT_OUTPUTDIR, "biquadratic", variablesToBePrinted);
+//************* PRINT END **************************************************************************  
 
   return 0;
 }
@@ -139,11 +142,11 @@ void AssemblePoissonProblem(MultiLevelProblem& ml_prob) {
 
   //solution variable
   unsigned soluIndex;
-  soluIndex = mlSol->GetIndex("u");    // get the position of "u" in the ml_sol object
-  unsigned soluType = mlSol->GetSolutionType(soluIndex);    // get the finite element type for "u"
+  soluIndex = mlSol->GetIndex("U");    // get the position of "U" in the ml_sol object
+  unsigned soluType = mlSol->GetSolutionType(soluIndex);    // get the finite element type for "U"
 
   unsigned soluPdeIndex;
-  soluPdeIndex = mlPdeSys->GetSolPdeIndex("u");    // get the position of "u" in the pdeSys object
+  soluPdeIndex = mlPdeSys->GetSolPdeIndex("U");    // get the position of "U" in the pdeSys object
 
   vector < double >  solu; // local solution
   solu.reserve(maxSize);
