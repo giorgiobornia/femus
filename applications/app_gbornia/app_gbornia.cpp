@@ -23,9 +23,9 @@ using namespace femus;
 bool SetBoundaryCondition(const std::vector < double >& x, const char solName[], double& value, const int faceName, const double time) {
   bool dirichlet = true; //dirichlet
   value = 0;
-
+/*
   if (faceName == 2)
-    dirichlet = false;
+    dirichlet = false;*/
 
   return dirichlet;
 }
@@ -50,10 +50,12 @@ int main(int argc, char** args) {
   MultiLevelMesh mlMsh;
   double scalingFactor = 1.;
   // read coarse level mesh and generate finers level meshes
-  mlMsh.ReadCoarseMesh("./input/square.neu", "seventh", scalingFactor);
+//   .ReadCoarseMesh("./input/square.neu", "seventh", scalingFactor);
+  mlMsh.GenerateCoarseBoxMesh(8,8,0,-0.5,0.5,-0.5,0.5,0.,0.,QUAD9,"seventh");
+  
   /* "seventh" is the order of accuracy that is used in the gauss integration scheme
       probably in the furure it is not going to be an argument of this function   */
-  unsigned numberOfUniformLevels = 3;
+  unsigned numberOfUniformLevels = 1;
   unsigned numberOfSelectiveLevels = 0;
   mlMsh.RefineMesh(numberOfUniformLevels , numberOfUniformLevels + numberOfSelectiveLevels, NULL);
   mlMsh.PrintInfo();
