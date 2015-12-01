@@ -17,6 +17,8 @@
 #include "GMVWriter.hpp"
 #include "LinearImplicitSystem.hpp"
 #include "NumericVector.hpp"
+#include "Files.hpp"
+
 
 using namespace femus;
 
@@ -45,13 +47,19 @@ int main(int argc, char** args) {
   FemusInit mpinit(argc, args, MPI_COMM_WORLD);
  //************* INITIALIZATION END **************************************************************************  
 
+ // ======= Files ========================
+  Files files; 
+        files.CheckIODirectories();
+        files.RedirectCout();
+  
+  
 //************* MESH BEGIN **************************************************************************  
   // define multilevel mesh
   MultiLevelMesh mlMsh;
   double scalingFactor = 1.;
   // read coarse level mesh and generate finers level meshes
 //   .ReadCoarseMesh("./input/square.neu", "seventh", scalingFactor);
-  mlMsh.GenerateCoarseBoxMesh(8,8,0,-0.5,0.5,-0.5,0.5,0.,0.,QUAD9,"seventh");
+  mlMsh.GenerateCoarseBoxMesh(2,2,0,-0.5,0.5,-0.5,0.5,0.,0.,QUAD9,"seventh");
   
   /* "seventh" is the order of accuracy that is used in the gauss integration scheme
       probably in the furure it is not going to be an argument of this function   */
@@ -100,12 +108,8 @@ int main(int argc, char** args) {
   variablesToBePrinted.push_back("U");
 
   VTKWriter vtkIO(&mlSol);
-  vtkIO.write(DEFAULT_OUTPUTDIR, "biquadratic", variablesToBePrinted);
+  vtkIO.write(/*DEFAULT_OUTPUTDIR*/files.GetOutputPath(), "biquadratic", variablesToBePrinted);
 
-  GMVWriter gmvIO(&mlSol);
-  variablesToBePrinted.push_back("all");
-  gmvIO.SetDebugOutput(false);
-  gmvIO.write(DEFAULT_OUTPUTDIR, "biquadratic", variablesToBePrinted);
 //************* PRINT END **************************************************************************  
 
   return 0;
@@ -236,7 +240,7 @@ void AssemblePoissonProblem(MultiLevelProblem& ml_prob) {
     Res.resize(nDofu);    //resize
     std::fill(Res.begin(), Res.end(), 0.);    //set Res to zero
 
-    Jac.resize(nDofu * nDofu);    //resize
+    Jac.resize(nDofu * nDofu);    //resizesrcTerm * phi
     std::fill(Jac.begin(), Jac.end(), 0.);    //set Jac to zero
  // =========== EQUATION ===============    
     
