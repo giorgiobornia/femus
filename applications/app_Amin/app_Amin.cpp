@@ -21,11 +21,12 @@
 using namespace femus;
 
 bool SetBoundaryCondition(const std::vector < double >& x, const char solName[], double& value, const int faceName, const double time) {
-  bool dirichlet = true; //dirichlet
-  value = 0;
-/*
-  if (faceName == 2)
-    dirichlet = false;*/
+  bool dirichlet = true; 
+  value = 0.;
+
+  if (faceName == 1)    dirichlet = false;
+
+  if (faceName == 3)    dirichlet = false;
 
   return dirichlet;
 }
@@ -67,8 +68,7 @@ int main(int argc, char** args) {
   
   double scalingFactor = 1.;
   // read coarse level mesh and generate finers level meshes
-//   .ReadCoarseMesh("./input/square.neu", "seventh", scalingFactor);
-  mlMsh.GenerateCoarseBoxMesh(2,2,0,-0.5,0.5,-0.5,0.5,0.,0.,QUAD9,"seventh");
+  mlMsh.GenerateCoarseBoxMesh(4,4,0,-0.5,0.5,-0.5,0.5,0.,0.,QUAD9,"seventh");
   
   /* "seventh" is the order of accuracy that is used in the gauss integration scheme
       probably in the furure it is not going to be an argument of this function   */
@@ -83,9 +83,9 @@ int main(int argc, char** args) {
   MultiLevelSolution mlSol(&mlMsh);
 
   // add variables to mlSol
-  mlSol.AddSolution("U", LAGRANGE, SECOND);
-  mlSol.AddSolution("Z", LAGRANGE, SECOND);
-  mlSol.AddSolution("Y", LAGRANGE, SECOND);
+  mlSol.AddSolution("U", LAGRANGE, FIRST);
+  mlSol.AddSolution("Z", LAGRANGE, FIRST);
+  mlSol.AddSolution("Y", LAGRANGE, FIRST);
 
   mlSol.Initialize("All");    // initialize all varaibles to zero
   
@@ -135,11 +135,6 @@ int main(int argc, char** args) {
 
   VTKWriter vtkIO(&mlSol);
   vtkIO.write(DEFAULT_OUTPUTDIR, "biquadratic", variablesToBePrinted);
-  
-  GMVWriter gmvIO(&mlSol);
-  variablesToBePrinted.push_back("all");
-  gmvIO.SetDebugOutput(false);
-  gmvIO.write(DEFAULT_OUTPUTDIR, "biquadratic", variablesToBePrinted);
 //************* PRINT END **************************************************************************  
 
    return 0;
@@ -252,7 +247,7 @@ void AssemblePoissonProblem(MultiLevelProblem& ml_prob) {
   soluPdeIndexZ = mlPdeSys->GetSolPdeIndex("Z");    // get the position of "Z" in the pdeSys object
 
   vector < double >  soluZ; // local solution
-  soluY.reserve(maxSize);
+  soluZ.reserve(maxSize);
   
   vector< int > l2GMap_Z; // local to global mapping
   l2GMap_Z.reserve(maxSize);
@@ -278,11 +273,6 @@ void AssemblePoissonProblem(MultiLevelProblem& ml_prob) {
 
   vector < double > Jac;
   Jac.reserve(maxSize * maxSize);
-  
-  double T_des = 100.;
-  double alpha = 10.e5;
-  double beta  = 1.;
-  double gamma = 1.;
   
   if (assembleMatrix) { KK->zero(); }// Set to zero all the entries of the Global Matrix
    RES->zero();
@@ -316,7 +306,7 @@ void AssemblePoissonProblem(MultiLevelProblem& ml_prob) {
    
     
 // =========== U ===============    
-    unsigned nDofU  = el->GetElementDofNumber(kel, soluTypeU);    // number of solution element dofs
+    unsigned nDofU  = el->GetElementDofNumber(kel, soluTypeU);
 
     //resize
     l2GMap_U.resize(nDofU);
@@ -324,16 +314,16 @@ void AssemblePoissonProblem(MultiLevelProblem& ml_prob) {
     
     //fill
    for (unsigned i = 0; i < soluU.size(); i++) {
-      unsigned iNode = el->GetMeshDof(kel, i, soluTypeU);    // local to global solution node
-      unsigned solDofU = msh->GetMetisDof(iNode, soluTypeU);    // global to global mapping between solution node and solution dof
-      soluU[i] = (*sol->_Sol[soluIndexU])(solDofU);      // global extraction and local storage for the solution
-      l2GMap_U[i] = pdeSys->GetKKDof(soluIndexU, soluPdeIndexU, iNode);    // global to global mapping between solution node and pdeSys dof
+      unsigned iNode = el->GetMeshDof(kel, i, soluTypeU);
+      unsigned solDofU = msh->GetMetisDof(iNode, soluTypeU);
+      soluU[i] = (*sol->_Sol[soluIndexU])(solDofU);
+      l2GMap_U[i] = pdeSys->GetKKDof(soluIndexU, soluPdeIndexU, iNode);
     }
 // =========== U =============== 
  
  
 // =========== Y =============== 
-     unsigned nDofY  = el->GetElementDofNumber(kel, soluTypeY);    // number of solution element dofs
+     unsigned nDofY  = el->GetElementDofNumber(kel, soluTypeY); 
 
     //resize
     l2GMap_Y.resize(nDofY);
@@ -341,15 +331,15 @@ void AssemblePoissonProblem(MultiLevelProblem& ml_prob) {
     
     //fill
    for (unsigned i = 0; i < soluY.size(); i++) {
-      unsigned iNode = el->GetMeshDof(kel, i, soluTypeY);    // local to global solution node
-      unsigned solDofY = msh->GetMetisDof(iNode, soluTypeY);    // global to global mapping between solution node and solution dof
-      soluY[i] = (*sol->_Sol[soluIndexY])(solDofY);      // global extraction and local storage for the solution
-      l2GMap_Y[i] = pdeSys->GetKKDof(soluIndexY, soluPdeIndexY, iNode);    // global to global mapping between solution node and pdeSys dof
- 
+      unsigned iNode = el->GetMeshDof(kel, i, soluTypeY);   
+      unsigned solDofY = msh->GetMetisDof(iNode, soluTypeY);   
+      soluY[i] = (*sol->_Sol[soluIndexY])(solDofY);
+      l2GMap_Y[i] = pdeSys->GetKKDof(soluIndexY, soluPdeIndexY, iNode);  
+   }
 // =========== Y ===============
       
 // =========== Z =============== 
-     unsigned nDofZ  = el->GetElementDofNumber(kel, soluTypeZ);    // number of solution element dofs
+     unsigned nDofZ  = el->GetElementDofNumber(kel, soluTypeZ); 
 
     //resize
     l2GMap_Z.resize(nDofZ);
@@ -357,28 +347,27 @@ void AssemblePoissonProblem(MultiLevelProblem& ml_prob) {
     
     //fill
    for (unsigned i = 0; i < soluZ.size(); i++) {
-      unsigned iNode = el->GetMeshDof(kel, i, soluTypeZ);    // local to global solution node
-      unsigned solDofZ = msh->GetMetisDof(iNode, soluTypeZ);    // global to global mapping between solution node and solution dof
-      soluZ[i] = (*sol->_Sol[soluIndexZ])(solDofZ);      // global extraction and local storage for the solution
-      l2GMap_Z[i] = pdeSys->GetKKDof(soluIndexZ, soluPdeIndexZ, iNode);    // global to global mapping between solution node and pdeSys dof
- 
+      unsigned iNode = el->GetMeshDof(kel, i, soluTypeZ); 
+      unsigned solDofZ = msh->GetMetisDof(iNode, soluTypeZ);
+      soluZ[i] = (*sol->_Sol[soluIndexZ])(solDofZ); 
+      l2GMap_Z[i] = pdeSys->GetKKDof(soluIndexZ, soluPdeIndexZ, iNode); 
+   }
 // =========== Z ===============
 
-unsigned nDof_AllVars = nDofU + nDofY + nDofZ; 
+    unsigned nDof_AllVars = nDofU + nDofY + nDofZ; 
     const int nDof_max    = nDofZ; 
 
  // =========== EQUATION ===============    
     Res.resize(nDof_AllVars);    //resize
-    std::fill(Res.begin(), Res.end(), 0.);    //set Res to zero
+    std::fill(Res.begin(), Res.end(), 0.);
 
     Jac.resize(nDof_AllVars * nDof_AllVars);    //resize
-    std::fill(Jac.begin(), Jac.end(), 0.);    //set Jac to zero
+    std::fill(Jac.begin(), Jac.end(), 0.);
     
     l2GMap_AllVars.resize(0);
     l2GMap_AllVars.insert(l2GMap_AllVars.end(),l2GMap_U.begin(),l2GMap_U.end());
     l2GMap_AllVars.insert(l2GMap_AllVars.end(),l2GMap_Y.begin(),l2GMap_Y.end());
     l2GMap_AllVars.insert(l2GMap_AllVars.end(),l2GMap_Z.begin(),l2GMap_Z.end());
-     
  // =========== EQUATION ===============    
     
    
@@ -413,11 +402,11 @@ unsigned nDof_AllVars = nDofU + nDofY + nDofZ;
           double srcTerm = 10.;
 	  
           // FIRST ROW
-	  if (i < nDofU)    Res[0                      + i] += weight * (0.) ;
+	  if (i < nDofU)   Res[0    + 0      + i] += weight * srcTerm * phi_U[i] ;
           // SECOND ROW
-          if (i < nDofY) Res[nDofY               + i] += weight * ( alpha * T_des * phi_Y[i] );
+          if (i < nDofY)   Res[nDofU + 0     + i] += weight * srcTerm * phi_Y[i] ;
           // THIRD ROW
-          if (i < nDofZ)   Res[nDofU + nDofY + i] += weight * ( alpha * T_des * phi_Z[i] );
+          if (i < nDofZ)   Res[nDofU + nDofY + i] += weight * srcTerm * phi_Z[i] ;
 
           if (assembleMatrix) {
             // *** phi_j loop ***
@@ -425,24 +414,18 @@ unsigned nDof_AllVars = nDofU + nDofY + nDofZ;
               double laplace_mat_U = 0.;
               double laplace_mat_Y = 0.;
               double laplace_mat_Z = 0.;
-              double laplace_mat_UVSZ = 0.;
 
               for (unsigned kdim = 0; kdim < dim; kdim++) {
 		if ( i < nDofU && j < nDofU )         laplace_mat_U        += (phi_x_U[i * dim + kdim] * phi_x_U[j * dim + kdim]);
 		if ( i < nDofY && j < nDofY )         laplace_mat_Y        += (phi_x_Y[i * dim + kdim] * phi_x_Y[j * dim + kdim]);
 		if ( i < nDofZ && j < nDofZ )         laplace_mat_Z        += (phi_x_Z[i * dim + kdim] * phi_x_Z[j * dim + kdim]);
-		if ( i < nDofU && j < nDofZ )         laplace_mat_UVSZ     += (phi_x_U[i * dim + kdim] * phi_x_Z[j * dim + kdim]);
 		
               }
 
-                if ( i < nDofU && j < nDofU )         Jac[ 0 * (nDofU + nDofY + nDofZ) + i * (nDofU + nDofY + nDofZ) + (0 + j)] += weight * laplace_mat_U;
-		if ( i < nDofY && j < nDofY )         Jac[ (nDofU + 0) * (nDofU + nDofY + nDofZ) + i * (nDofU + nDofY + nDofZ) + (nDofU + j)]  += weight * laplace_mat_Y;
-		if ( i < nDofZ && j < nDofZ )         Jac[ (nDofU + nDofY) * (nDofU + nDofY + nDofZ) + i * (nDofU + nDofY + nDofZ) + (nDofU  + nDofY + j)]  += weight * ( gamma * laplace_mat_Z + beta * phi_Z[i] * phi_Z[j] + alpha * phi_Z[i] * phi_Z[j]);
-                if ( i < nDofU && j < nDofZ )         Jac[ 0 * (nDofU + nDofY + nDofZ) + i * (nDofU + nDofY + nDofZ) + (nDofU + nDofY + j)] += weight * laplace_mat_UVSZ;
-		if ( i < nDofY && j < nDofU )         Jac[(nDofU + 0) * (nDofU + nDofY + nDofZ) + i * (nDofU + nDofY + nDofZ) + (0 + j) ] += weight * alpha *  phi_Y[i] * phi_U[j];
-		if ( i < nDofY && j < nDofZ )         Jac[(nDofU + 0) * (nDofU + nDofY + nDofZ) + i * (nDofU + nDofY + nDofZ) + (nDofU + nDofY + j)] += weight * alpha *  phi_Y[i] * phi_Z[j];
-		if ( i < nDofZ && j < nDofU ) 	      Jac[(nDofU + nDofY) * (nDofU + nDofY + nDofZ) + i * (nDofU + nDofY + nDofZ) + (0 + j)] += weight * ( alpha * phi_Z[i] * phi_U[j]);
-		
+                if ( i < nDofU && j < nDofU )         Jac[               0 * (nDofU + nDofY + nDofZ) + i * (nDofU + nDofY + nDofZ) + (0              + j)]  += weight * laplace_mat_U;
+		if ( i < nDofY && j < nDofY )         Jac[ (nDofU + 0)     * (nDofU + nDofY + nDofZ) + i * (nDofU + nDofY + nDofZ) + (nDofU          + j)]  += weight * laplace_mat_Y;
+		if ( i < nDofZ && j < nDofZ )         Jac[ (nDofU + nDofY) * (nDofU + nDofY + nDofZ) + i * (nDofU + nDofY + nDofZ) + (nDofU  + nDofY + j)]  += weight * laplace_mat_Z;
+ 		
             } // end phi_j loop
           } // endif assemble_matrix
   
@@ -467,6 +450,4 @@ unsigned nDof_AllVars = nDofU + nDofY + nDofZ;
   if (assembleMatrix) KK->close();
 
   // ***************** END ASSEMBLY *******************
-}
-  }
 }
