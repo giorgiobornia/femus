@@ -56,6 +56,11 @@ extern "C" bool BdcFunction(const std::vector < double >& xyz,const char name[],
       test=0; // Neumann
       value=0.;
     }
+    //cylinder
+    else if(7==facename ){
+      test=1; // Dirichlet
+      value=0.;
+    }
   }
   else if(!strcmp(name,"V")) {
     // inflow
@@ -86,6 +91,11 @@ extern "C" bool BdcFunction(const std::vector < double >& xyz,const char name[],
     // outflow
     else if(6==facename ){
       test=0; // Neumann
+      value=0.;
+    }
+    //cylinder
+    else if(7==facename ){
+      test=1; // Dirichlet
       value=0.;
     }
   }
@@ -120,6 +130,11 @@ extern "C" bool BdcFunction(const std::vector < double >& xyz,const char name[],
       test=0; // Neumann
       value=0.;
     }
+    //cylinder
+    else if(7==facename ){
+      test=1; // Dirichlet
+      value=0.;
+    }
   }
   else if(!strcmp(name,"P")) {
     // inflow
@@ -149,6 +164,11 @@ extern "C" bool BdcFunction(const std::vector < double >& xyz,const char name[],
     }
     // outflow
     else if(6==facename ){
+      test=0; // Neumann
+      value=0.;
+    }
+    //cylinder
+    else if(7==facename ){
       test=0; // Neumann
       value=0.;
     }
@@ -184,6 +204,11 @@ extern "C" bool BdcFunction(const std::vector < double >& xyz,const char name[],
       test=1; // Dirichlet
       value=0.;
     }
+    //cylinder
+    else if(7==facename ){
+      test=1; // Dirichlet
+      value=0.;
+    }
   }
   else if(!strcmp(name,"DY")) {
     // inflow
@@ -216,6 +241,11 @@ extern "C" bool BdcFunction(const std::vector < double >& xyz,const char name[],
       test=1; // Dirichlet
       value=0.;
     }
+    //cylinder
+    else if(7==facename ){
+      test=1; // Dirichlet
+      value=0.;
+    }
   }
   else if(!strcmp(name,"DZ")) {
     // inflow
@@ -245,6 +275,11 @@ extern "C" bool BdcFunction(const std::vector < double >& xyz,const char name[],
     }
     // outflow
     else if(6==facename ){
+      test=1; // Dirichlet
+      value=0.;
+    }
+    //cylinder
+    else if(7==facename ){
       test=1; // Dirichlet
       value=0.;
     }
