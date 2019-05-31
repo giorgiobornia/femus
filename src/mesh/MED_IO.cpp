@@ -148,24 +148,24 @@ namespace femus
             set_node_coordinates(file_id, mesh_menus[j], coords, Lref);
     
 // Groups of the mesh ===============
-     std::vector< GroupInfo >     group_info = get_group_vector_flags_per_mesh(file_id,mesh_menus[j]);
-    
-          for(unsigned i = 0; i < group_info.size(); i++) {
-              compute_group_geom_elem_and_size(file_id, mesh_menus[j],group_info[i]);
-          }
+//      std::vector< GroupInfo >     group_info = get_group_vector_flags_per_mesh(file_id,mesh_menus[j]);
+//     
+//           for(unsigned i = 0; i < group_info.size(); i++) {
+//               compute_group_geom_elem_and_size(file_id, mesh_menus[j],group_info[i]);
+//           }
           
     
 // dimension loop
-      for(unsigned i = 0; i < mesh.GetDimension(); i++) {
+      for(unsigned i = mesh.GetDimension()-1; i < mesh.GetDimension(); i++) {
 
             set_elem_connectivity(file_id, mesh_menus[j], i, geom_elem_per_dimension[i], type_elem_flag);  //type_elem_flag is to say "There exists at least one element of that type in the mesh"
 
-         set_elem_group_ownership(file_id, mesh_menus[j], i, geom_elem_per_dimension[i], group_info);
+//          set_elem_group_ownership(file_id, mesh_menus[j], i, geom_elem_per_dimension[i], group_info);
       
       }
              
 
-    if (mesh.GetDimension() > 1) find_boundary_faces_and_set_face_flags(file_id, mesh_menus[j], geom_elem_per_dimension[mesh.GetDimension() -1 -1], group_info);
+//     if (mesh.GetDimension() > 1) find_boundary_faces_and_set_face_flags(file_id, mesh_menus[j], geom_elem_per_dimension[mesh.GetDimension() -1 -1], group_info);
     
     }
     
@@ -583,7 +583,7 @@ namespace femus
         for(unsigned j = 0; j < n_nodes; j++) {
           coords[0][j] = xyz_med[j] / Lref;
           coords[1][j] = xyz_med[j + n_nodes] / Lref;
-          coords[2][j] = 0.;
+          coords[2][j] = xyz_med[j + 2 * n_nodes] / Lref;
         }
       }
 
@@ -764,7 +764,7 @@ namespace femus
 
     Mesh& mesh = GetMesh();
 
-    const int n_fem_types = mesh.GetDimension();
+    const int n_fem_types = 1; //mesh.GetDimension();
     std::cout << "No hybrid mesh for now: only 1 FE type per dimension" << std::endl;
     
     
@@ -809,8 +809,8 @@ namespace femus
         if( /*temp_i.compare("TR3") == 0 ||*/
             temp_i.compare("TR6") == 0)   geom_elem_per_dimension[mesh.GetDimension() - 1] = new GeomElemTri6();
 
-        if(/*temp_i.compare("SE2") == 0 ||*/
-            temp_i.compare("SE3") == 0)   geom_elem_per_dimension[mesh.GetDimension() - 1 - 1] = new GeomElemEdge3();
+//         if(/*temp_i.compare("SE2") == 0 ||*/
+//             temp_i.compare("SE3") == 0)   geom_elem_per_dimension[mesh.GetDimension() - 1 - 1] = new GeomElemEdge3();
 
       }
 
@@ -877,7 +877,7 @@ namespace femus
 
       const std::vector< GeomElemBase* >  geom_elem_per_dimension = get_geom_elem_type_per_dimension(file_id, my_mesh_name_dir);
 
-       if(mesh.GetDimension() != n_fem_type) { std::cout << "Mismatch between dimension and number of element types" << std::endl;   abort();  }
+//        if(mesh.GetDimension() != n_fem_type) { std::cout << "Mismatch between dimension and number of element types" << std::endl;   abort();  }
 
       
     return geom_elem_per_dimension;
